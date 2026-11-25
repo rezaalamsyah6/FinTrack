@@ -39,13 +39,19 @@ let transactions = [];
 let accounts = [];
 let accFilter = (() => { try { return localStorage.getItem('kk_acc_filter') || ''; } catch { return ''; } })();
 let viewMonth = new Date(); viewMonth.setDate(1);
+let txRange = 'today';                    // filter tanggal di tab Transaksi; selalu mulai dari hari ini
+let txCustom = { from: '', to: '' };
+let calOpen = false;
+let calMonth = new Date(); calMonth.setDate(1);   // bulan yang tampil di kalender
+let calAnchor = '';                       // klik pertama, menunggu klik kedua untuk membentuk rentang
 let editingId = null;
 let editingAccId = null;
 
 /* ================= Helpers ================= */
 const $ = s => document.querySelector(s);
 const rupiah = n => (n < 0 ? '-' : '') + 'Rp' + Math.abs(n).toLocaleString('id-ID');
-const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const localISO = date => { const d = new Date(date); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const todayISO = () => localISO(new Date());
 const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pick = t => ({
@@ -412,14 +418,102 @@ function txRow(t) {
     </li>`;
 }
 
-function renderTx() {
-  const mk = monthKey(viewMonth);
-  $('#month-label').textContent = viewMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+// rentang tanggal tab Transaksi, kedua ujung ikut dihitung ("3 hari terakhir" = hari ini + 2 hari sebelumnya)
+function txDates() {
+  const now = new Date(); now.setHours(12, 0, 0, 0);
+  const back = n => { const d = new Date(now); d.setDate(d.getDate() - n); return localISO(d); };
+  const today = back(0);
+  switch (txRange) {
+    case 'yesterday': return { from: back(1), to: back(1) };
+    case '3d': return { from: back(2), to: today };
+    case '7d': return { from: back(6), to: today };
+    case '14d': return { from: back(13), to: today };
+    case '1m': {
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0).getDate();   // hari terakhir bulan lalu
+      return { from: localISO(new Date(now.getFullYear(), now.getMonth() - 1, Math.min(now.getDate(), lastDay), 12)), to: today };
+    }
+    case 'month': return {
+      from: `${monthKey(viewMonth)}-01`,
+      to: localISO(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0, 12)),
+    };
+    case 'custom': return { ...txCustom };
+    default: return { from: today, to: today };
+  }
+}
+function txRangeLabel({ from, to }) {
+  if (txRange === 'month') return viewMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  if (from === to) {
+    return new Date(from + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  return `${fmtDate(from + 'T00:00:00')} – ${fmtDate(to + 'T00:00:00')}`;
+}
+// setelah menyimpan: bila tanggalnya di luar rentang yang tampil, pindah ke tanggal itu
+function showTxDate(date) {
+  const { from, to } = txDates();
+  if (date >= from && date <= to) return;
+  if (txRange === 'month') {
+    viewMonth = new Date(date + 'T00:00:00'); viewMonth.setDate(1);
+  } else if (date === todayISO()) {
+    txRange = 'today';
+  } else {
+    txRange = 'custom';
+    txCustom = { from: date, to: date };
+  }
+  calOpen = false;
+}
 
-  const monthTx = transactions.filter(t => t.date.startsWith(mk) && matchAcc(t))
+/* ---------- Kalender: klik sekali = satu hari, klik tanggal lain = rentang ---------- */
+function renderCal({ from, to }) {
+  $('#tx-cal').hidden = !calOpen;
+  $('#cal-toggle').setAttribute('aria-expanded', calOpen);
+  if (!calOpen) return;
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const blanks = (new Date(y, m, 1).getDay() + 6) % 7;                // minggu dimulai hari Senin
+  const days = new Date(y, m + 1, 0).getDate();
+  const today = todayISO();
+  $('#cal-month').textContent = calMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  let html = '';
+  for (let n = 1; n <= days; n++) {
+    const date = `${monthKey(calMonth)}-${String(n).padStart(2, '0')}`;
+    const on = date >= from && date <= to;
+    const cls = [on && 'in', date === from && 'start', date === to && 'end', date === today && 'today'].filter(Boolean).join(' ');
+    const label = new Date(y, m, n).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    html += `<button type="button" data-date="${date}" class="${cls}" aria-pressed="${on}" aria-label="${label}"${
+      date === today ? ' aria-current="date"' : ''}${n === 1 ? ` style="grid-column-start:${blanks + 1}"` : ''}>${n}</button>`;
+  }
+  $('#cal-days').innerHTML = html;
+  $('#cal-hint').textContent = calAnchor
+    ? 'Ketuk tanggal lain untuk membuat rentang.'
+    : 'Ketuk satu tanggal untuk melihat hari itu.';
+}
+function openCal() {
+  calMonth = new Date(txDates().to + 'T00:00:00'); calMonth.setDate(1);
+  calAnchor = '';
+  calOpen = true;
+}
+function pickDate(date) {
+  if (calAnchor && date !== calAnchor) {
+    const [from, to] = [calAnchor, date].sort();                      // boleh klik mundur
+    txCustom = { from, to };
+    calAnchor = '';
+  } else {
+    txCustom = { from: date, to: date };
+    calAnchor = date;
+  }
+  txRange = 'custom';
+}
+
+function renderTx() {
+  const range = txDates();
+  $('#tx-range').value = txRange;
+  $('#range-label').textContent = txRangeLabel(range);
+  $('#prev-month').hidden = $('#next-month').hidden = txRange !== 'month';
+  renderCal(range);
+
+  const shownTx = transactions.filter(t => t.date >= range.from && t.date <= range.to && matchAcc(t))
     .sort((a, b) => b.date.localeCompare(a.date) || String(b.created_at).localeCompare(String(a.created_at)));
 
-  const flow = monthTx.filter(t => isFlow(t));
+  const flow = shownTx.filter(t => isFlow(t));
   const sumIn = flow.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0);
   const sumOut = flow.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0);
   $('#sum-in').textContent = rupiah(sumIn);
@@ -438,15 +532,15 @@ function renderTx() {
     <div class="bar-row">
       <div class="bar-label"><span>${iconOf('out', c)} ${esc(c)}</span><span>${rupiah(v)} · ${Math.round(v / sumOut * 100)}%</span></div>
       <div class="bar-track"><div class="bar-fill" style="width:${(v / cats[0][1] * 100).toFixed(1)}%"></div></div>
-    </div>`).join('') : '<p class="empty">Belum ada pengeluaran bulan ini.</p>';
+    </div>`).join('') : '<p class="empty">Tidak ada pengeluaran pada tanggal ini.</p>';
 
   // Daftar transaksi, dikelompokkan per tanggal
-  if (!monthTx.length) {
-    $('#tx-list').innerHTML = '<p class="empty">Belum ada transaksi. Tekan ＋ untuk menambah.</p>';
+  if (!shownTx.length) {
+    $('#tx-list').innerHTML = `<p class="empty">${transactions.length ? 'Tidak ada transaksi pada tanggal ini.' : 'Belum ada transaksi.'} Tekan ＋ untuk menambah.</p>`;
     return;
   }
   let html = '', lastDate = '';
-  for (const t of monthTx) {
+  for (const t of shownTx) {
     if (t.date !== lastDate) {
       lastDate = t.date;
       const d = new Date(t.date + 'T00:00:00');
@@ -456,6 +550,35 @@ function renderTx() {
   }
   $('#tx-list').innerHTML = html;
 }
+
+$('#tx-range').addEventListener('change', e => {
+  calOpen = false;
+  if (e.target.value === 'custom') {                       // mulai dari rentang yang sedang tampil
+    txCustom = txDates();
+    openCal();
+  }
+  if (e.target.value === 'month') { viewMonth = new Date(); viewMonth.setDate(1); }
+  txRange = e.target.value;
+  renderTx();
+});
+$('#cal-toggle').onclick = () => {
+  if (calOpen) calOpen = false; else openCal();
+  renderTx();
+};
+$('#cal-done').onclick = () => { calOpen = false; renderTx(); $('#cal-toggle').focus(); };
+$('#cal-prev').onclick = () => { calMonth.setMonth(calMonth.getMonth() - 1); renderTx(); };
+$('#cal-next').onclick = () => { calMonth.setMonth(calMonth.getMonth() + 1); renderTx(); };
+$('#cal-days').addEventListener('click', e => {
+  const date = e.target.closest('[data-date]')?.dataset.date;
+  if (!date) return;
+  pickDate(date);
+  renderTx();
+  $(`#cal-days [data-date="${date}"]`).focus();            // tombol dibuat ulang, kembalikan fokus keyboard
+});
+// aplikasi dibiarkan terbuka sampai lewat tengah malam
+document.addEventListener('visibilitychange', () => {
+  if (user && document.visibilityState === 'visible') renderTx();
+});
 
 $('#prev-month').onclick = () => { viewMonth.setMonth(viewMonth.getMonth() - 1); render(); };
 $('#next-month').onclick = () => { viewMonth.setMonth(viewMonth.getMonth() + 1); render(); };
@@ -801,7 +924,7 @@ $('#tx-form').addEventListener('submit', async e => {
     }
     try { localStorage.setItem('kk_last_acc', account_id); } catch { }
     saveCache();
-    const d = new Date(data.date + 'T00:00:00'); d.setDate(1); viewMonth = d;   // pindah ke bulan transaksi
+    showTxDate(data.date);
     dlg.close();
     render();
   } catch (err) {

@@ -30,6 +30,7 @@
     <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M12 12v9M16 16l-4-4-4 4"/></symbol>
     <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
     <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
     <symbol id="i-offline" viewBox="0 0 24 24"><path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.8M19 12.9a10 10 0 0 0-2.1-1.5M2 8.8a15 15 0 0 1 4.2-2.8M22 8.8a15 15 0 0 0-11.3-3.8M2 2l20 20"/></symbol>
   </svg>
 
@@ -149,16 +150,42 @@
 
       <!-- ============ TRANSAKSI ============ -->
       <div id="view-tx" class="view" hidden>
-      <select class="acc-filter tx-filter" aria-label="Filter rekening"></select>
+      <div class="tx-filters">
+        <select id="tx-range" class="pill-select" aria-label="Filter tanggal">
+          <option value="today">Hari ini</option>
+          <option value="yesterday">Kemarin</option>
+          <option value="3d">3 hari terakhir</option>
+          <option value="7d">7 hari terakhir</option>
+          <option value="14d">14 hari terakhir</option>
+          <option value="1m">1 bulan terakhir</option>
+          <option value="month">Per bulan</option>
+          <option value="custom">Pilih tanggal…</option>
+        </select>
+        <select class="acc-filter pill-select" aria-label="Filter rekening"></select>
+      </div>
       <div class="month-nav">
-        <button id="prev-month" class="icon-btn" aria-label="Bulan sebelumnya"><svg class="i"><use href="#i-left"/></svg></button>
-        <strong id="month-label"></strong>
-        <button id="next-month" class="icon-btn" aria-label="Bulan berikutnya"><svg class="i"><use href="#i-right"/></svg></button>
+        <button id="prev-month" class="icon-btn" aria-label="Bulan sebelumnya" hidden><svg class="i"><use href="#i-left"/></svg></button>
+        <button id="cal-toggle" class="range-btn" aria-expanded="false" aria-controls="tx-cal"><svg class="i"><use href="#i-cal"/></svg><span id="range-label"></span></button>
+        <button id="next-month" class="icon-btn" aria-label="Bulan berikutnya" hidden><svg class="i"><use href="#i-right"/></svg></button>
+      </div>
+
+      <div id="tx-cal" class="cal" role="group" aria-label="Pilih tanggal" hidden>
+        <div class="cal-head">
+          <button id="cal-prev" class="icon-btn" aria-label="Bulan sebelumnya"><svg class="i"><use href="#i-left"/></svg></button>
+          <strong id="cal-month" aria-live="polite"></strong>
+          <button id="cal-next" class="icon-btn" aria-label="Bulan berikutnya"><svg class="i"><use href="#i-right"/></svg></button>
+        </div>
+        <div class="cal-week" aria-hidden="true"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div>
+        <div id="cal-days" class="cal-days"></div>
+        <div class="cal-foot">
+          <p id="cal-hint" aria-live="polite"></p>
+          <button id="cal-done" class="btn primary">Selesai</button>
+        </div>
       </div>
 
       <div class="summary">
         <div class="card balance">
-          <span>Selisih bulan ini (pemasukan − pengeluaran)</span>
+          <span>Selisih (pemasukan − pengeluaran)</span>
           <strong id="sum-balance">Rp0</strong>
         </div>
         <div class="card in"><span>Pemasukan</span><strong id="sum-in">Rp0</strong></div>
@@ -168,7 +195,7 @@
 
       <section class="panel">
         <h2>Pengeluaran per kategori</h2>
-        <div id="cat-bars"><p class="empty">Belum ada pengeluaran bulan ini.</p></div>
+        <div id="cat-bars"></div>
       </section>
 
       <section class="panel">
