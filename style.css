@@ -291,10 +291,47 @@ dialog {
   background: var(--card); color: var(--text);
 }
 dialog::backdrop { background: rgba(0,0,0,.45); }
-#tx-form { padding: 20px; display: grid; gap: 12px; }
-#tx-form h2 { font-size: 18px; }
-#tx-form label { font-size: 13px; color: var(--muted); }
-.type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+dialog form { padding: 20px; display: grid; gap: 12px; }
+dialog form h2 { font-size: 18px; }
+dialog form label { font-size: 13px; color: var(--muted); }
+.type-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.type-toggle input[value="transfer"]:checked + span { background: var(--text); border-color: var(--text); color: var(--card); }
+.field-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+/* ---------- Filter rekening ---------- */
+.filters { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: 100%; min-width: 0; }
+.acc-filter {
+  width: auto; max-width: 100%; margin: 0; padding: 7px 32px 7px 12px; font-size: 14px; font-weight: 600;
+  border-radius: 999px; background-color: var(--card);
+}
+.tx-filter { display: block; margin: 0 auto 6px; }
+@media (max-width: 759px) { .filters { align-items: stretch; width: 100%; } .filters .acc-filter { align-self: flex-start; } }
+
+/* ---------- Rekening ---------- */
+#view-acc { max-width: 640px; margin: 0 auto; }
+.acc-hero { margin: 4px 0 14px; }
+.acc-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.acc-item {
+  background: var(--card); border-radius: var(--radius); padding: 14px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+}
+.acc-item .tx-icon { width: 44px; height: 44px; font-size: 22px; }
+.acc-item .acc-main { flex: 1; min-width: 0; }
+.acc-item .acc-name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-item .acc-meta { font-size: 12px; color: var(--muted); }
+.acc-item .acc-bal { font-weight: 650; font-size: 16px; white-space: nowrap; text-align: right; }
+.acc-item .acc-bal.neg { color: var(--bad); }
+.acc-item .acc-view { font-size: 12px; color: var(--green); background: none; border: 0; padding: 2px 0 0; cursor: pointer; font-weight: 600; }
+.btn.block { width: 100%; padding: 12px; }
+.hint { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 12px 2px; }
+.tx-amt.tr { color: var(--text); }
+
+/* saldo per rekening (dashboard) */
+.acc-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; cursor: pointer; }
+.acc-row:last-child { border-bottom: 0; }
+.acc-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-row .val { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.acc-row .share { color: var(--muted); font-size: 12px; width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
 .type-toggle label { color: var(--text) !important; }
 .type-toggle input { display: none; }
 .type-toggle span {
@@ -305,3 +342,20 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .type-toggle input[value="in"]:checked + span { background: var(--green); border-color: var(--green); color: #fff; }
 .dialog-actions { display: flex; gap: 8px; margin-top: 4px; }
 .spacer { flex: 1; }
+
+/* ---------- Investasi ---------- */
+.list-head { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 18px 2px 8px; }
+.acc-item .acc-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.acc-item .acc-sub.stale { color: #b06000; font-weight: 600; }
+.acc-gain { font-size: 12px; font-weight: 600; text-align: right; white-space: nowrap; }
+.acc-gain.good { color: var(--good); }
+.acc-gain.bad { color: var(--bad); }
+.acc-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.acc-actions button { font-size: 12px; color: var(--green); background: none; border: 0; padding: 2px 0 0; cursor: pointer; font-weight: 600; }
+.acc-item { align-items: flex-start; }
+.acc-item .tx-icon { margin-top: 2px; }
+dialog form .sub { margin-top: -6px; }
+@media (prefers-color-scheme: dark) { .acc-item .acc-sub.stale { color: #f0a040; } }
+.acc-item { flex-wrap: wrap; }
+.acc-item .acc-gain { display: block; }
+.acc-actions.row { flex-basis: 100%; justify-content: flex-end; gap: 18px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--border); }

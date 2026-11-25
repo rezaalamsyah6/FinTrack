@@ -62,7 +62,7 @@ function getPeriod(key) {
 function totals(a, b) {
   let inc = 0, out = 0;
   for (const t of transactions) {
-    if (t.date < a || t.date > b) continue;
+    if (t.date < a || t.date > b || !isFlow(t)) continue;
     if (t.type === 'in') inc += t.amount; else out += t.amount;
   }
   return { inc, out, net: inc - out };
@@ -254,11 +254,25 @@ function renderDashboard() {
   document.querySelectorAll('#period-chips button').forEach(b => b.classList.toggle('active', b.dataset.p === D.period));
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const balance = transactions.reduce((s, t) => s + (t.type === 'in' ? t.amount : -t.amount), 0);
-  $('#d-hero').textContent = rupiah(balance);
-  $('#d-hero-sub').textContent = `Dari ${transactions.length.toLocaleString('id-ID')} transaksi · per ${today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  const nTx = transactions.filter(t => matchAcc(t)).length;
+  const fAcc = accById(accFilter);
+  const hasInv = invAccounts().length > 0;
+  $('#d-hero').previousElementSibling.textContent = fAcc
+    ? `${isInv(fAcc) ? 'Nilai' : 'Saldo'} ${fAcc.name}`
+    : (hasInv ? 'Kekayaan bersih' : 'Saldo semua rekening');
+  $('#d-hero').textContent = rupiah(valueOfFilter());
+  const asOf = `per ${today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  if (fAcc && isInv(fAcc)) {
+    $('#d-hero-sub').innerHTML = `Modal ${rupiah(balanceOf(fAcc.id))} ${gainHTML(valueOf(fAcc.id), balanceOf(fAcc.id))} · ${esc(invStatus(fAcc).text)}`;
+  } else if (!fAcc && hasInv) {
+    const inv = invAccounts();
+    const iv = inv.reduce((s, a) => s + valueOf(a.id), 0), ic = inv.reduce((s, a) => s + balanceOf(a.id), 0);
+    $('#d-hero-sub').innerHTML = `Kas ${rupiah(netWorth() - iv)} · Investasi ${rupiah(iv)} ${gainHTML(iv, ic)} · ${asOf}`;
+  } else {
+    $('#d-hero-sub').textContent = `Dari ${nTx.toLocaleString('id-ID')} transaksi · ${asOf}`;
+  }
 
-  const empty = transactions.length === 0;
+  const empty = transactions.length === 0 && accounts.length === 0;
   $('#d-empty').hidden = !empty;
   $('#d-body').hidden = empty;
   if (empty) return;
@@ -271,14 +285,29 @@ function renderDashboard() {
   const rate = t => (t.inc > 0 ? t.net / t.inc * 100 : null);
   const prevDays = P.prev ? Math.round((parseISO(P.prev.b) - parseISO(P.prev.a)) / 864e5) + 1 : 1;
 
+  /* transfer masuk/keluar (hanya relevan saat melihat satu rekening) */
+  let trIn = 0, trOut = 0;
+  if (accFilter) {
+    for (const t of transactions) {
+      if (t.type !== 'transfer' || t.date < P.a || t.date > P.b) continue;
+      if (t.to_account_id === accFilter) trIn += t.amount;
+      if (t.account_id === accFilter) trOut += t.amount;
+    }
+  }
+  const trNet = trIn - trOut;
+
   /* ubin */
   const r = rate(cur);
+  const tile4 = accFilter
+    ? tile('Transfer bersih', (trNet > 0 ? '+' : '') + rupiah(trNet),
+        `<span class="t-delta">Masuk ${'Rp' + compact(trIn)} · keluar ${'Rp' + compact(trOut)}</span>`)
+    : tile('Rasio menabung', r === null ? '–' : `${fmt1(r)}%`,
+        prv && rate(curToDate) !== null && rate(prv) !== null ? delta(rate(curToDate), rate(prv), true, P, 'pt') : '');
   $('#d-tiles').innerHTML =
     tile('Pemasukan', rupiah(cur.inc), prv ? delta(curToDate.inc, prv.inc, true, P) : '', 'in') +
     tile('Pengeluaran', rupiah(cur.out), prv ? delta(curToDate.out, prv.out, false, P) : '', 'out') +
     tile('Selisih', (cur.net > 0 ? '+' : '') + rupiah(cur.net), prv ? delta(curToDate.net, prv.net, true, P, 'rp') : '') +
-    tile('Rasio menabung', r === null ? '–' : `${fmt1(r)}%`,
-      prv && rate(curToDate) !== null && rate(prv) !== null ? delta(rate(curToDate), rate(prv), true, P, 'pt') : '') +
+    tile4 +
     tile('Rata-rata belanja/hari', rupiah(Math.round(cur.out / P.days)),
       prv ? delta(curToDate.out / P.days, prv.out / prevDays, false, P) : '');
 
@@ -286,7 +315,7 @@ function renderDashboard() {
   const byCat = {};
   const cnt = {};
   for (const t of transactions) {
-    if (t.type !== 'out' || t.date < P.a || t.date > P.b) continue;
+    if (t.type !== 'out' || !isFlow(t) || t.date < P.a || t.date > P.b) continue;
     byCat[t.category] = (byCat[t.category] || 0) + t.amount;
     cnt[t.category] = (cnt[t.category] || 0) + 1;
   }
@@ -295,8 +324,13 @@ function renderDashboard() {
   /* insight */
   const parts = [];
   if (cats.length) parts.push(`Pengeluaran terbesar ada di <b>${esc(cats[0][0])}</b> (${Math.round(cats[0][1] / cur.out * 100)}% dari total).`);
-  if (cur.inc > 0 && cur.net >= 0) parts.push(`Anda menyisihkan <b>${fmt1(r)}%</b> dari pemasukan.`);
-  if (cur.net < 0) parts.push(`Pengeluaran <b>melebihi pemasukan ${rupiah(-cur.net)}</b> di periode ini.`);
+  if (accFilter && (trIn || trOut)) {
+    const chg = cur.net + trNet;
+    parts.push(`Termasuk transfer, saldo ${esc(accName(accFilter))} <b>${chg >= 0 ? 'naik' : 'turun'} ${rupiah(Math.abs(chg))}</b> di periode ini.`);
+  } else {
+    if (cur.inc > 0 && cur.net >= 0) parts.push(`Anda menyisihkan <b>${fmt1(r)}%</b> dari pemasukan.`);
+    if (cur.net < 0) parts.push(`Pengeluaran <b>melebihi pemasukan ${rupiah(-cur.net)}</b> di periode ini.`);
+  }
   $('#d-insight').innerHTML = parts.join(' ');
 
   renderCashflow(P, cur);
@@ -319,7 +353,9 @@ function renderDashboard() {
   });
 
   /* top 5 */
-  const top = transactions.filter(t => t.type === 'out' && t.date >= P.a && t.date <= P.b)
+  renderAccBreakdown();
+
+  const top = transactions.filter(t => t.type === 'out' && isFlow(t) && t.date >= P.a && t.date <= P.b)
     .sort((a, b) => b.amount - a.amount).slice(0, 5);
   $('#d-top').innerHTML = top.length ? `<div class="top-table"><table class="data-table"><thead><tr>
       <th>Tanggal</th><th>Kategori</th><th>Catatan</th><th class="num">Jumlah</th></tr></thead><tbody>
@@ -340,7 +376,7 @@ function renderCashflow(P, cur) {
     const nDays = P.end.getDate();
     const vals = Array(nDays).fill(0);
     for (const t of transactions) {
-      if (t.type === 'out' && t.date >= P.a && t.date <= P.b) vals[parseISO(t.date).getDate() - 1] += t.amount;
+      if (t.type === 'out' && isFlow(t) && t.date >= P.a && t.date <= P.b) vals[parseISO(t.date).getDate() - 1] += t.amount;
     }
     const labels = vals.map((_, i) => String(i + 1));
     $('#cf-title').textContent = 'Pengeluaran harian';
@@ -360,7 +396,7 @@ function renderCashflow(P, cur) {
     const inc = Array(n).fill(0), out = Array(n).fill(0);
     const idx = d => (d.getFullYear() - P.start.getFullYear()) * 12 + d.getMonth() - P.start.getMonth();
     for (const t of transactions) {
-      if (t.date < P.a || t.date > P.b) continue;
+      if (t.date < P.a || t.date > P.b || !isFlow(t)) continue;
       const i = idx(parseISO(t.date));
       if (i < 0 || i >= n) continue;
       (t.type === 'in' ? inc : out)[i] += t.amount;
@@ -394,10 +430,11 @@ function renderCashflow(P, cur) {
 
 function renderBalance(P) {
   const endD = P.today < P.end ? P.today : P.end;
-  let opening = 0;
+  let opening = openingOf();
   const perDay = {};
   for (const t of transactions) {
-    const v = t.type === 'in' ? t.amount : -t.amount;
+    const v = effect(t);
+    if (!v) continue;
     if (t.date < P.a) opening += v;
     else if (t.date <= iso(endD)) perDay[t.date] = (perDay[t.date] || 0) + v;
   }
@@ -412,8 +449,10 @@ function renderBalance(P) {
   const step = Math.ceil(all.length / 370);
   const pts = step > 1 ? all.filter((_, i) => i % step === 0 || i === all.length - 1) : all;
   const change = bal - opening;
-  $('#bal-sub').textContent = change === 0 ? 'Tidak berubah di periode ini'
-    : `${change > 0 ? 'Naik' : 'Turun'} ${rupiah(Math.abs(change))} di periode ini`;
+  const costNote = (accFilter ? isInv(accById(accFilter)) : invAccounts().length > 0)
+    ? ' · investasi dihitung sebesar modal' : '';
+  $('#bal-sub').textContent = (change === 0 ? 'Tidak berubah di periode ini'
+    : `${change > 0 ? 'Naik' : 'Turun'} ${rupiah(Math.abs(change))} di periode ini`) + costNote;
   lineChart($('#bal-chart'), pts, 'Grafik tren saldo');
   D.tables.bal = {
     head: ['Tanggal', 'Perubahan', 'Saldo'], num: [1, 2],
@@ -421,6 +460,30 @@ function renderBalance(P) {
   };
   applyTableState('bal');
 }
+
+/* ---------------- Saldo per rekening ---------------- */
+function renderAccBreakdown() {
+  const card = $('#d-acc-card');
+  card.hidden = accounts.length < 2 || !!accFilter;
+  $('#d-top').closest('section').classList.toggle('span-2', card.hidden);
+  if (card.hidden) return;
+  const rows = accounts.map(a => ({ a, bal: valueOf(a.id) })).sort((x, y) => y.bal - x.bal);
+  const posTotal = rows.reduce((s, r) => s + Math.max(0, r.bal), 0);
+  $('#d-acc').previousElementSibling.querySelector('h2').textContent =
+    invAccounts().length ? 'Kas & investasi' : 'Saldo per rekening';
+  $('#d-acc-sub').textContent = `${accounts.length} rekening · ketuk untuk melihat detailnya`;
+  $('#d-acc').innerHTML = rows.map(({ a, bal }) => `
+    <div class="acc-row" data-acc="${a.id}">
+      <span>${kindOf(a)[1]}</span>
+      <span class="name">${esc(a.name)}${isInv(a) && invStatus(a).stale ? ' <small title="Nilai perlu diperbarui">⚠️</small>' : ''}</span>
+      <span class="val">${rupiah(bal)}</span>
+      <span class="share">${posTotal > 0 && bal > 0 ? Math.round(bal / posTotal * 100) + '%' : '–'}</span>
+    </div>`).join('');
+}
+$('#d-acc').addEventListener('click', e => {
+  const r = e.target.closest('[data-acc]');
+  if (r) { setAccFilter(r.dataset.acc); scrollTo(0, 0); }
+});
 
 /* ---------------- Interaksi ---------------- */
 $('#period-chips').addEventListener('click', e => {
@@ -435,6 +498,7 @@ $('#period-chips').addEventListener('click', e => {
 function setView(v) {
   $('#view-dash').hidden = v !== 'dash';
   $('#view-tx').hidden = v !== 'tx';
+  $('#view-acc').hidden = v !== 'acc';
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   try { localStorage.setItem('kk_view', v); } catch { }
   clearHover();

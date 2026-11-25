@@ -62,6 +62,8 @@
             <strong id="d-hero">Rp0</strong>
             <small id="d-hero-sub"></small>
           </div>
+          <div class="filters">
+          <select class="acc-filter" aria-label="Filter rekening"></select>
           <div class="chips" id="period-chips" role="tablist" aria-label="Periode">
             <button data-p="month" class="active">Bulan ini</button>
             <button data-p="3m">3 bulan</button>
@@ -69,6 +71,7 @@
             <button data-p="12m">12 bulan</button>
             <button data-p="ytd">Tahun ini</button>
             <button data-p="all">Semua</button>
+          </div>
           </div>
         </div>
 
@@ -105,7 +108,12 @@
               <div id="d-cat"></div>
             </section>
 
-            <section class="panel chart-card span-2">
+            <section class="panel chart-card" id="d-acc-card">
+              <header><div><h2>Saldo per rekening</h2><p class="sub" id="d-acc-sub"></p></div></header>
+              <div id="d-acc"></div>
+            </section>
+
+            <section class="panel chart-card">
               <header><div><h2>Pengeluaran terbesar</h2><p class="sub">5 transaksi terbesar di periode ini</p></div></header>
               <div id="d-top"></div>
             </section>
@@ -115,6 +123,7 @@
 
       <!-- ============ TRANSAKSI ============ -->
       <div id="view-tx" class="view" hidden>
+      <select class="acc-filter tx-filter" aria-label="Filter rekening"></select>
       <div class="month-nav">
         <button id="prev-month" class="icon-btn" aria-label="Bulan sebelumnya">‹</button>
         <strong id="month-label"></strong>
@@ -123,13 +132,13 @@
 
       <div class="summary">
         <div class="card balance">
-          <span>Saldo bulan ini</span>
+          <span>Selisih bulan ini (pemasukan − pengeluaran)</span>
           <strong id="sum-balance">Rp0</strong>
         </div>
         <div class="card in"><span>Pemasukan</span><strong id="sum-in">Rp0</strong></div>
         <div class="card out"><span>Pengeluaran</span><strong id="sum-out">Rp0</strong></div>
       </div>
-      <p class="total-all">Saldo total semua waktu: <strong id="sum-all">Rp0</strong></p>
+      <p class="total-all"><span id="sum-all-label">Saldo saat ini</span>: <strong id="sum-all">Rp0</strong></p>
 
       <section class="panel">
         <h2>Pengeluaran per kategori</h2>
@@ -141,6 +150,24 @@
         <ul id="tx-list"></ul>
       </section>
       </div>
+
+      <!-- ============ REKENING ============ -->
+      <div id="view-acc" class="view" hidden>
+        <div class="hero acc-hero">
+          <span id="acc-total-label">Total saldo semua rekening</span>
+          <strong id="acc-total">Rp0</strong>
+          <small id="acc-total-sub"></small>
+        </div>
+        <h3 class="list-head" id="cash-head">Kas</h3>
+        <ul id="acc-list" class="acc-list"></ul>
+        <h3 class="list-head" id="inv-head" hidden>Investasi</h3>
+        <ul id="inv-list" class="acc-list"></ul>
+        <p class="hint" id="price-note" hidden></p>
+        <button id="acc-add" class="btn primary block">＋ Tambah rekening / investasi</button>
+        <p class="hint">Ketuk rekening untuk mengubah nama, jenis, atau saldo awal.
+          Pindah uang antar rekening, termasuk membeli atau menjual investasi, dicatat sebagai <b>Transfer</b>,
+          sehingga tidak terhitung sebagai pemasukan atau pengeluaran.</p>
+      </div>
     </main>
 
     <button id="add-btn" class="fab" aria-label="Tambah transaksi">＋</button>
@@ -148,6 +175,7 @@
     <nav class="tabbar">
       <button data-view="dash" class="active"><span>📊</span>Dashboard</button>
       <button data-view="tx"><span>📋</span>Transaksi</button>
+      <button data-view="acc"><span>🏦</span>Rekening</button>
     </nav>
     <div id="tip" class="tip" role="tooltip" hidden></div>
   </section>
@@ -159,11 +187,22 @@
       <div class="type-toggle">
         <label><input type="radio" name="type" value="out" checked><span>Pengeluaran</span></label>
         <label><input type="radio" name="type" value="in"><span>Pemasukan</span></label>
+        <label><input type="radio" name="type" value="transfer"><span>Transfer</span></label>
       </div>
       <label>Jumlah (Rp)
         <input id="f-amount" type="text" inputmode="numeric" placeholder="0" required>
       </label>
-      <label>Kategori
+      <label><span id="f-account-label">Rekening</span>
+        <select id="f-account" required></select>
+      </label>
+      <label id="f-to-wrap" hidden>Ke rekening
+        <select id="f-to"></select>
+      </label>
+      <label id="f-units-wrap" hidden><span id="f-units-label">Jumlah koin</span>
+        <input id="f-units" type="text" inputmode="decimal" placeholder="mis. 0,0012">
+        <small class="field-hint" id="f-units-hint"></small>
+      </label>
+      <label id="f-cat-wrap">Kategori
         <select id="f-category"></select>
       </label>
       <label>Tanggal
@@ -176,6 +215,71 @@
         <button type="button" id="tx-delete" class="btn danger" hidden>Hapus</button>
         <span class="spacer"></span>
         <button type="button" id="tx-cancel" class="btn">Batal</button>
+        <button type="submit" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ FORM REKENING ============ -->
+  <dialog id="acc-dialog">
+    <form id="acc-form" method="dialog">
+      <h2 id="acc-title">Tambah Rekening</h2>
+      <label>Nama rekening
+        <input id="a-name" type="text" maxlength="40" placeholder="mis. BCA, GoPay, Dompet" required>
+      </label>
+      <label>Jenis
+        <select id="a-kind">
+          <optgroup label="Kas">
+            <option value="bank">🏦 Bank</option>
+            <option value="ewallet">📱 E-wallet</option>
+            <option value="cash">💵 Tunai</option>
+            <option value="other">💼 Lainnya</option>
+          </optgroup>
+          <optgroup label="Investasi">
+            <option value="bond">📜 Obligasi</option>
+            <option value="mmf">🏛️ Reksa dana pasar uang</option>
+            <option value="crypto">₿ Kripto (harga otomatis)</option>
+            <option value="invest">📈 Investasi lainnya</option>
+          </optgroup>
+        </select>
+      </label>
+      <label id="a-coin-wrap" hidden>Koin
+        <select id="a-coin">
+          <option value="bitcoin">Bitcoin (BTC)</option>
+          <option value="ethereum">Ethereum (ETH)</option>
+          <option value="solana">Solana (SOL)</option>
+          <option value="tether">Tether (USDT)</option>
+        </select>
+      </label>
+      <label id="a-units-wrap" hidden><span id="a-units-label">Jumlah koin yang sudah dimiliki</span>
+        <input id="a-units" type="text" inputmode="decimal" placeholder="mis. 0,0123">
+        <small class="field-hint">Jumlah sebelum mulai dicatat. Pembelian berikutnya dicatat lewat Transfer.</small>
+      </label>
+      <label><span id="a-opening-label">Saldo awal (Rp)</span>
+        <input id="a-opening" type="text" inputmode="numeric" placeholder="0">
+        <small class="field-hint" id="a-opening-hint">Saldo rekening sebelum mulai dicatat di aplikasi ini.</small>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="acc-delete" class="btn danger" hidden>Hapus</button>
+        <span class="spacer"></span>
+        <button type="button" id="acc-cancel" class="btn">Batal</button>
+        <button type="submit" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ PERBARUI NILAI INVESTASI ============ -->
+  <dialog id="val-dialog">
+    <form id="val-form" method="dialog">
+      <h2>Perbarui nilai</h2>
+      <p class="sub" id="val-name"></p>
+      <label>Nilai saat ini (Rp)
+        <input id="v-value" type="text" inputmode="numeric" placeholder="0" required>
+        <small class="field-hint">Lihat nilainya di aplikasi tempat Anda membeli (mis. aplikasi reksa dana atau bank).</small>
+      </label>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="val-cancel" class="btn">Batal</button>
         <button type="submit" class="btn primary">Simpan</button>
       </div>
     </form>
