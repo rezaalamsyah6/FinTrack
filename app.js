@@ -179,7 +179,7 @@ function setAccFilter(id) {
 }
 function fillAccFilters() {
   if (accFilter && accounts.length && !accById(accFilter)) accFilter = '';
-  const opts = `<option value="">🏦 Semua rekening</option>` +
+  const opts = `<option value="">Semua rekening</option>` +
     accounts.map(a => `<option value="${a.id}">${kindOf(a)[1]} ${esc(a.name)}</option>`).join('');
   document.querySelectorAll('.acc-filter').forEach(sel => {
     sel.innerHTML = opts;
@@ -374,7 +374,8 @@ window.addEventListener('offline', () => { if (user) $('#offline-note').hidden =
 function showApp() {
   $('#login').hidden = true;
   $('#app').hidden = false;
-  $('#menu-user').textContent = '👤 ' + user.email;
+  $('#menu-user').innerHTML = `<b>Akun saya</b>${esc(user.email)}`;
+  $('#avatar-initial').textContent = (user.email || '?')[0].toUpperCase();
   $('#migrate-btn').hidden = readOldTx().length === 0;
   updateInstallButton();
   loadData();
@@ -864,7 +865,7 @@ function download(name, content, mime) {
 const TYPE_LABEL = { in: 'Pemasukan', out: 'Pengeluaran', transfer: 'Transfer' };
 
 menu.addEventListener('click', async e => {
-  const act = e.target.dataset.act;
+  const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'export') {
     download(`backup-keuangan-${todayISO()}.json`, JSON.stringify(transactions.map(pick), null, 2), 'application/json');
   } else if (act === 'import') {

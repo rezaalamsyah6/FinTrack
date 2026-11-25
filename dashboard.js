@@ -499,13 +499,13 @@ function setView(v) {
   $('#view-dash').hidden = v !== 'dash';
   $('#view-tx').hidden = v !== 'tx';
   $('#view-acc').hidden = v !== 'acc';
-  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   try { localStorage.setItem('kk_view', v); } catch { }
   clearHover();
   scrollTo(0, 0);
   if (v === 'dash') renderDashboard();
 }
-document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 setView((() => { try { return localStorage.getItem('kk_view') || 'dash'; } catch { return 'dash'; } })());
 
 // gambar ulang grafik saat lebar layar berubah
