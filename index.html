@@ -254,6 +254,10 @@
         <input id="f-units" type="text" inputmode="decimal" placeholder="mis. 0,0012">
         <small class="field-hint" id="f-units-hint"></small>
       </label>
+      <label id="f-fee-wrap" hidden>Fee (Rp)
+        <input id="f-fee" type="text" inputmode="numeric" placeholder="opsional" autocomplete="off">
+        <small class="field-hint" id="f-fee-hint"></small>
+      </label>
       <label id="f-cat-wrap">Kategori
         <select id="f-category"></select>
       </label>
@@ -315,6 +319,30 @@
         <button type="button" id="acc-delete" class="btn danger" hidden>Hapus</button>
         <span class="spacer"></span>
         <button type="button" id="acc-cancel" class="btn">Batal</button>
+        <button type="submit" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ PERBARUI SALDO KAS ============ -->
+  <dialog id="bal-dialog">
+    <form id="bal-form" method="dialog">
+      <h2>Perbarui saldo</h2>
+      <p class="sub" id="bal-name"></p>
+      <label><span id="b-actual-label">Saldo sebenarnya (Rp)</span>
+        <input id="b-actual" type="text" inputmode="numeric" placeholder="Lihat di aplikasi bank" autocomplete="off" required>
+      </label>
+      <label id="b-interest-wrap">Bunga yang diterima (Rp)
+        <input id="b-interest" type="text" inputmode="numeric" placeholder="opsional" autocomplete="off">
+        <small class="field-hint">Isi kalau bank memberi bunga sekaligus memotong biaya admin, supaya keduanya tercatat terpisah.</small>
+      </label>
+      <label>Tanggal
+        <input id="b-date" type="date" required>
+      </label>
+      <p class="field-hint" id="bal-plan" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="bal-cancel" class="btn">Batal</button>
         <button type="submit" class="btn primary">Simpan</button>
       </div>
     </form>

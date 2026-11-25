@@ -10,17 +10,19 @@ const ACC_TABLE = 'accounts';
 const KEY_OLD_TX = 'kk_tx';               // data versi lama (sebelum Supabase)
 const cacheKey = () => 'kk_cache2_' + user.id;
 
+// 'auto' = hanya dibuat otomatis oleh "Perbarui saldo", tidak ditawarkan di form transaksi
 const CATEGORIES = {
   out: [
     ['Makan & Minum', '🍜'], ['Transportasi', '🚗'], ['Belanja', '🛒'], ['Tagihan', '💡'],
     ['Pulsa & Internet', '📱'], ['Kesehatan', '💊'], ['Hiburan', '🎬'], ['Pendidikan', '📚'],
-    ['Keluarga', '👨‍👩‍👧'], ['Lainnya', '📦'],
+    ['Keluarga', '👨‍👩‍👧'], ['Biaya Admin', '🏦'], ['Uang Tercecer', '🪙', 'auto'], ['Lainnya', '📦'],
   ],
   in: [
-    ['Gaji', '💼'], ['Bonus', '🎁'], ['Usaha', '🏪'], ['Investasi', '📈'], ['Lainnya', '💰'],
+    ['Gaji', '💼'], ['Bonus', '🎁'], ['Usaha', '🏪'], ['Investasi', '📈'], ['Bunga', '🏦'], ['Uang Ditemukan', '🪙', 'auto'], ['Lainnya', '💰'],
   ],
 };
-const iconOf = (type, cat) => type === 'transfer' ? '🔁'
+const FEE_CAT = 'Biaya Transfer';         // kategori otomatis untuk fee transfer
+const iconOf = (type, cat) => type === 'transfer' ? '🔁' : cat === FEE_CAT ? '💸'
   : (CATEGORIES[type].find(c => c[0] === cat) || [, type === 'in' ? '💰' : '📦'])[1];
 
 // [label, ikon, kelompok]  kelompok: cash = kas, inv = investasi
@@ -58,8 +60,13 @@ const pick = t => ({
   type: t.type, amount: Number(t.amount), category: t.category, date: t.date, note: t.note || '',
   account_id: t.account_id, to_account_id: t.type === 'transfer' ? t.to_account_id : null,
   ...(t.units ? { units: Number(t.units) } : {}),
+  ...(t.fee ? { fee: Number(t.fee) } : {}),
 });
-const normTx = t => ({ ...t, amount: Number(t.amount), units: t.units == null ? null : Number(t.units) });
+const normTx = t => ({
+  ...t, amount: Number(t.amount),
+  units: t.units == null ? null : Number(t.units),
+  fee: t.fee == null ? null : Number(t.fee),
+});
 const normAcc = a => ({
   ...a, opening_balance: Number(a.opening_balance),
   opening_units: Number(a.opening_units || 0),
@@ -95,13 +102,23 @@ const accIcon = id => kindOf(accById(id))[1];
 const matchAcc = (t, acc = accFilter) => !acc || t.account_id === acc || t.to_account_id === acc;
 // pemasukan/pengeluaran (transfer TIDAK termasuk)
 const isFlow = (t, acc = accFilter) => t.type !== 'transfer' && (!acc || t.account_id === acc);
+// Fee transfer: di luar jumlah yang dipindahkan dan dibayar rekening asal.
+// Dari investasi (jual): dipotong dari uang yang masuk ke rekening tujuan.
+const feePayer = (from, to) => isInv(accById(from)) ? to : from;
+// tambahkan fee transfer sebagai pengeluaran, untuk ringkasan & grafik
+const withFees = list => list.flatMap(t => t.type === 'transfer' && t.fee ? [t, {
+  id: t.id, type: 'out', amount: t.fee, category: FEE_CAT, date: t.date, created_at: t.created_at,
+  account_id: feePayer(t.account_id, t.to_account_id), to_account_id: null,
+  note: `${accName(t.account_id)} → ${accName(t.to_account_id)}`,
+}] : [t]);
 // pengaruh transaksi terhadap saldo
 function effect(t, acc = accFilter) {
   if (t.type === 'transfer') {
-    if (!acc) return 0;
-    if (t.account_id === acc) return -t.amount;
-    if (t.to_account_id === acc) return t.amount;
-    return 0;
+    const fee = t.fee || 0;
+    if (!acc) return -fee;
+    if (t.account_id !== acc && t.to_account_id !== acc) return 0;
+    return (t.account_id === acc ? -t.amount : t.amount)
+      - (fee && feePayer(t.account_id, t.to_account_id) === acc ? fee : 0);
   }
   if (acc && t.account_id !== acc) return 0;
   return t.type === 'in' ? t.amount : -t.amount;
@@ -214,7 +231,7 @@ function showError(err) {
     return;
   }
   if (err?.code === '42P01' || err?.code === 'PGRST205' || err?.code === '42703' || err?.code === 'PGRST204') {
-    alert('Gagal: database belum diperbarui untuk fitur terbaru.\n\nJalankan file SQL migrasi (02-rekening lalu 03-investasi) di Supabase SQL Editor.');
+    alert('Gagal: database belum diperbarui untuk fitur terbaru.\n\nJalankan file SQL migrasi (02-rekening, 03-investasi, lalu 04-fee-transfer) di Supabase SQL Editor.');
     return;
   }
   if (err?.code === '23514' && /kind_check/.test(err.message)) {
@@ -344,6 +361,7 @@ async function fetchAll(table, orderCols) {
 }
 
 async function loadData() {
+  let fresh = false;                              // true bila data terbaru berhasil diambil
   // tampilkan cache dulu agar cepat (dan agar tetap ada isi saat offline)
   try {
     const c = JSON.parse(localStorage.getItem(cacheKey())) || {};
@@ -361,6 +379,7 @@ async function loadData() {
     transactions = txs.map(normTx);
     saveCache();
     $('#offline-note').hidden = true;
+    fresh = true;
     refreshPrices();
   } catch (err) {
     if (navigator.onLine && err?.code) {        // error dari database, bukan karena offline
@@ -371,6 +390,7 @@ async function loadData() {
     }
   }
   render();
+  return fresh;
 }
 
 window.addEventListener('online', () => { if (user) loadData(); });
@@ -401,6 +421,7 @@ function txRow(t) {
     sub = `${accName(t.account_id)} → ${accName(t.to_account_id)}`;
     const ca = [accById(t.to_account_id), accById(t.account_id)].find(a => a?.kind === 'crypto');
     if (t.units && ca) sub += ` · ${fmtUnits(t.units)} ${coinSym(ca)}`;
+    if (t.fee) sub += ` · fee ${rupiah(t.fee)}`;
     if (accFilter === t.account_id) { sign = '-'; cls = 'out'; }
     else if (accFilter === t.to_account_id) { sign = '+'; cls = 'in'; }
     else { sign = ''; cls = 'tr'; }
@@ -414,7 +435,7 @@ function txRow(t) {
   return `<li class="tx" data-id="${esc(t.id)}">
       <div class="tx-icon">${iconOf(t.type, t.category)}</div>
       <div class="tx-main"><div class="cat">${esc(title)}</div>${sub ? `<div class="note">${esc(sub)}</div>` : ''}</div>
-      <div class="tx-amt ${cls}">${sign}${rupiah(t.amount)}</div>
+      <div class="tx-amt ${cls}">${sign}${rupiah(t.type === 'transfer' && accFilter ? Math.abs(effect(t)) : t.amount)}</div>
     </li>`;
 }
 
@@ -513,7 +534,7 @@ function renderTx() {
   const shownTx = transactions.filter(t => t.date >= range.from && t.date <= range.to && matchAcc(t))
     .sort((a, b) => b.date.localeCompare(a.date) || String(b.created_at).localeCompare(String(a.created_at)));
 
-  const flow = shownTx.filter(t => isFlow(t));
+  const flow = withFees(shownTx).filter(t => isFlow(t));
   const sumIn = flow.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0);
   const sumOut = flow.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0);
   $('#sum-in').textContent = rupiah(sumIn);
@@ -625,8 +646,10 @@ function renderAccounts() {
       <div class="tx-icon">${kindOf(a)[1]}</div>
       <div class="acc-main"><div class="acc-name">${esc(a.name)}</div>
         <div class="acc-meta">${kindOf(a)[0]} · ${n.toLocaleString('id-ID')} transaksi</div></div>
-      <div><div class="acc-bal ${bal < 0 ? 'neg' : ''}">${rupiah(bal)}</div>
-        <div class="acc-actions"><button data-view-acc="${a.id}">Lihat dashboard ›</button></div></div>
+      <div><div class="acc-bal ${bal < 0 ? 'neg' : ''}">${rupiah(bal)}</div></div>
+      <div class="acc-actions row">
+        <button data-update-bal="${a.id}">↻ Perbarui saldo</button>
+        <button data-view-acc="${a.id}">Lihat dashboard ›</button></div>
     </li>`;
   }).join('') || '<p class="empty">Belum ada rekening kas.</p>';
 
@@ -662,6 +685,8 @@ function renderAccounts() {
   if (v) { setAccFilter(v.dataset.viewAcc); setView('dash'); return; }
   const u = e.target.closest('[data-update-val]');
   if (u) { openValForm(accById(u.dataset.updateVal)); return; }
+  const ub = e.target.closest('[data-update-bal]');
+  if (ub) { openBalForm(ub.dataset.updateBal, ub); return; }
   const li = e.target.closest('.acc-item');
   if (li) openAccForm(accById(li.dataset.id));
 }));
@@ -690,6 +715,93 @@ $('#val-form').addEventListener('submit', async e => {
     accounts = accounts.map(a => a.id === valAccId ? normAcc(row) : a);
     saveCache();
     valDlg.close();
+    render();
+  } catch (err) {
+    showError(err);
+  } finally {
+    btn.disabled = false;
+  }
+});
+/* ---------- Perbarui saldo kas: selisih dicatat sebagai bunga / biaya admin (tunai: uang tercecer / ditemukan) ---------- */
+// Saldo awal dan transaksi lain tidak diubah.
+const balDlg = $('#bal-dialog');
+let balAccId = null;
+$('#b-actual').addEventListener('input', e => {            // berbeda dari isian lain: saldo 0 boleh
+  const d = e.target.value.replace(/\D/g, '');
+  e.target.value = d ? Number(d).toLocaleString('id-ID') : '';
+});
+formatAmountInput($('#b-interest'));
+
+const isCashAcc = () => accById(balAccId)?.kind === 'cash';   // uang tunai: tanpa bunga & biaya admin
+
+async function openBalForm(id, btn) {
+  if (!needOnline()) return;
+  btn.disabled = true;
+  const fresh = await loadData();                          // perangkat lain mungkin baru mencatat transaksi
+  btn.disabled = false;
+  const acc = accById(id);
+  if (!fresh || !acc) { alert('Data terbaru belum bisa dimuat. Coba lagi.'); return; }
+  balAccId = id;
+  $('#bal-name').textContent = `${kindOf(acc)[1]} ${acc.name} · tercatat ${rupiah(balanceOf(id))}`;
+  $('#b-interest-wrap').hidden = isCashAcc();
+  $('#b-actual-label').textContent = isCashAcc() ? 'Uang yang ada sekarang (Rp)' : 'Saldo sebenarnya (Rp)';
+  $('#b-actual').placeholder = isCashAcc() ? 'Hitung uang Anda' : 'Lihat di aplikasi bank';
+  $('#b-actual').value = '';
+  $('#b-interest').value = '';
+  $('#b-date').value = $('#b-date').max = todayISO();
+  showBalPlan();
+  balDlg.showModal();
+  $('#b-actual').focus();
+}
+// transaksi yang akan dibuat agar saldo tercatat = saldo sebenarnya
+function balPlan() {
+  const actual = digits($('#b-actual').value), interest = digits($('#b-interest').value);
+  const before = balanceOf(balAccId), diff = actual - before, rest = diff - interest;
+  const row = (type, category, amount) => ({
+    type, category, amount, account_id: balAccId, to_account_id: null,
+    date: $('#b-date').value, note: 'Penyesuaian saldo',
+  });
+  const rows = [];
+  if (interest) rows.push(row('in', 'Bunga', interest));
+  if (rest < 0) rows.push(row('out', isCashAcc() ? 'Uang Tercecer' : 'Biaya Admin', -rest));
+  if (rest > 0 && !interest) rows.push(row('in', isCashAcc() ? 'Uang Ditemukan' : 'Bunga', rest));
+  return { actual, before, diff, rows, unexplained: rest > 0 && interest ? rest : 0 };
+}
+const balRowText = r => `${r.category} ${r.type === 'in' ? '+' : '-'}${rupiah(r.amount)}`;
+function showBalPlan() {
+  const el = $('#bal-plan');
+  if (!$('#b-actual').value) { el.textContent = isCashAcc() ? 'Isi sesuai uang yang Anda pegang.' : 'Isi saldo sesuai aplikasi bank Anda.'; return; }
+  const p = balPlan();
+  el.textContent = p.unexplained ? `Masih ada selisih ${rupiah(p.unexplained)} di luar bunga.`
+    : p.rows.length ? `Selisih ${p.diff > 0 ? '+' : ''}${rupiah(p.diff)}. Akan dicatat: ${p.rows.map(balRowText).join(', ')}.`
+      : 'Saldo sudah sama, tidak ada yang perlu dicatat.';
+}
+['#b-actual', '#b-interest'].forEach(s => $(s).addEventListener('input', showBalPlan));
+$('#bal-cancel').onclick = () => balDlg.close();
+$('#bal-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const p = balPlan(), name = accName(balAccId);
+  if (p.unexplained) {
+    alert(`Saldo naik ${rupiah(p.unexplained)} lebih besar dari bunga yang diisi.\n\nKemungkinan ada pemasukan yang belum dicatat. Catat dulu, atau perbaiki isian bunga.`);
+    return;
+  }
+  if (!p.rows.length) { alert('Saldo sudah sama, tidak ada yang perlu dicatat.'); balDlg.close(); return; }
+  const future = transactions.filter(t => matchAcc(t, balAccId) && t.date > todayISO()).length;
+  if (!confirm(`Apakah Anda yakin tidak ada transaksi lain di ${name} yang belum dicatat?\n\n`
+    + `Saldo: ${rupiah(p.before)} → ${rupiah(p.actual)}\n`
+    + `Akan ditambahkan:\n${p.rows.map(r => '• ' + balRowText(r)).join('\n')}\n\n`
+    + (future ? `Perhatian: ${future} transaksi bertanggal setelah hari ini ikut terhitung di saldo tercatat.\n\n` : '')
+    + 'Transaksi lain tidak akan berubah.')) return;
+  if (!needOnline()) return;
+  const btn = $('#bal-form button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const { data: added, error } = await sb.from(TABLE).insert(p.rows).select();
+    if (error) throw error;
+    transactions.push(...added.map(normTx));
+    saveCache();
+    showTxDate(p.rows[0].date);
+    balDlg.close();
     render();
   } catch (err) {
     showError(err);
@@ -799,10 +911,12 @@ const amountInput = $('#f-amount');
 const saveBtn = $('#tx-form button[type="submit"]');
 let pendingTxAfterAcc = false;
 formatAmountInput(amountInput);
+formatAmountInput($('#f-fee'));
 
 function fillCategories(type, selected) {
   if (type === 'transfer') return;
   $('#f-category').innerHTML = CATEGORIES[type]
+    .filter(([c, , auto]) => !auto || c === selected)      // tetap tampil saat mengubah transaksinya
     .map(([c, i]) => `<option value="${c}" ${c === selected ? 'selected' : ''}>${i} ${c}</option>`).join('');
 }
 function fillAccountSelects(from, to) {
@@ -832,15 +946,30 @@ function updateUnitsField() {
     ? `Harga sekarang ±Rp${p.idr.toLocaleString('id-ID')} per ${sym}. Isi sesuai jumlah di aplikasi exchange Anda.`
     : 'Isi sesuai jumlah di aplikasi exchange Anda.';
 }
-$('#f-account').addEventListener('change', updateUnitsField);
-$('#f-to').addEventListener('change', updateUnitsField);
+// keterangan di bawah isian fee: siapa yang membayar dan berapa totalnya
+function updateFeeField() {
+  const from = $('#f-account').value, to = $('#f-to').value;
+  const fee = digits($('#f-fee').value), amount = digits(amountInput.value);
+  const payer = feePayer(from, to);
+  // antar investasi: tidak ada rekening kas yang membayar
+  $('#f-fee-wrap').hidden = document.querySelector('input[name="type"]:checked').value !== 'transfer' || isInv(accById(payer));
+  $('#f-fee-hint').textContent = !fee || !amount
+    ? 'Mis. biaya admin atau fee exchange. Dicatat sebagai pengeluaran “Biaya Transfer”.'
+    : payer === from ? `Keluar dari ${accName(from)}: ${rupiah(amount + fee)}`
+      : `Diterima di ${accName(to)}: ${rupiah(amount - fee)}`;
+}
+function updateTransferFields() { updateUnitsField(); updateFeeField(); }
+$('#f-account').addEventListener('change', updateTransferFields);
+$('#f-to').addEventListener('change', updateTransferFields);
+$('#f-fee').addEventListener('input', updateFeeField);
+amountInput.addEventListener('input', updateFeeField);
 function applyType(type) {
   const tr = type === 'transfer';
   $('#f-to-wrap').hidden = !tr;
   $('#f-cat-wrap').hidden = tr;
   $('#f-account-label').textContent = tr ? 'Dari rekening' : 'Rekening';
   fillCategories(type);
-  updateUnitsField();
+  updateTransferFields();
 }
 document.querySelectorAll('input[name="type"]').forEach(r =>
   r.addEventListener('change', () => applyType(r.value)));
@@ -867,8 +996,9 @@ function openForm(tx) {
   fillCategories(type, tx && tx.category);
   fillAccountSelects(tx ? tx.account_id : defaultAccount(), tx && tx.to_account_id);
   $('#f-units').value = tx?.units ? fmtUnits(tx.units) : '';
-  updateUnitsField();
   amountInput.value = tx ? tx.amount.toLocaleString('id-ID') : '';
+  $('#f-fee').value = tx?.fee ? tx.fee.toLocaleString('id-ID') : '';
+  updateTransferFields();
   $('#f-date').value = tx ? tx.date : todayISO();
   $('#f-note').value = tx ? tx.note : '';
   $('#tx-delete').hidden = !tx;
@@ -901,6 +1031,12 @@ $('#tx-form').addEventListener('submit', async e => {
     $('#f-units').focus();
     return;
   }
+  const fee = $('#f-fee-wrap').hidden ? 0 : digits($('#f-fee').value);
+  if (fee >= amount && feePayer(account_id, to_account_id) === to_account_id) {
+    alert('Fee harus lebih kecil dari jumlah, karena dipotong dari uang yang diterima.');
+    $('#f-fee').focus();
+    return;
+  }
   if (!needOnline()) return;
   const data = {
     type, amount, account_id, to_account_id,
@@ -911,6 +1047,9 @@ $('#tx-form').addEventListener('submit', async e => {
   // kolom units hanya dikirim bila relevan (agar tetap jalan sebelum migrasi 03)
   const prevUnits = editingId && transactions.find(t => t.id === editingId)?.units;
   if (leg || prevUnits) data.units = units;
+  // begitu juga kolom fee (migrasi 04)
+  const prevFee = editingId && transactions.find(t => t.id === editingId)?.fee;
+  if (fee || prevFee) data.fee = fee || null;
   saveBtn.disabled = true;
   try {
     if (editingId) {
@@ -994,10 +1133,10 @@ menu.addEventListener('click', async e => {
   } else if (act === 'import') {
     if (needOnline() && importTarget()) $('#import-file').click();
   } else if (act === 'csv') {
-    const rows = [['Tanggal', 'Jenis', 'Rekening', 'Ke Rekening', 'Kategori', 'Jumlah', 'Catatan']]
+    const rows = [['Tanggal', 'Jenis', 'Rekening', 'Ke Rekening', 'Kategori', 'Jumlah', 'Catatan', 'Fee']]
       .concat([...transactions].sort((a, b) => a.date.localeCompare(b.date))
         .map(t => [t.date, TYPE_LABEL[t.type], accName(t.account_id), t.to_account_id ? accName(t.to_account_id) : '',
-          t.category, t.amount, t.note]));
+          t.category, t.amount, t.note, t.fee || '']));
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     download(`keuangan-${todayISO()}.csv`, '﻿' + csv, 'text/csv');
   } else if (act === 'migrate') {

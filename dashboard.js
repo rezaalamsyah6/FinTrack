@@ -61,7 +61,7 @@ function getPeriod(key) {
 
 function totals(a, b) {
   let inc = 0, out = 0;
-  for (const t of transactions) {
+  for (const t of withFees(transactions)) {
     if (t.date < a || t.date > b || !isFlow(t)) continue;
     if (t.type === 'in') inc += t.amount; else out += t.amount;
   }
@@ -314,7 +314,7 @@ function renderDashboard() {
   /* kategori */
   const byCat = {};
   const cnt = {};
-  for (const t of transactions) {
+  for (const t of withFees(transactions)) {
     if (t.type !== 'out' || !isFlow(t) || t.date < P.a || t.date > P.b) continue;
     byCat[t.category] = (byCat[t.category] || 0) + t.amount;
     cnt[t.category] = (cnt[t.category] || 0) + 1;
@@ -355,7 +355,7 @@ function renderDashboard() {
   /* top 5 */
   renderAccBreakdown();
 
-  const top = transactions.filter(t => t.type === 'out' && isFlow(t) && t.date >= P.a && t.date <= P.b)
+  const top = withFees(transactions).filter(t => t.type === 'out' && isFlow(t) && t.date >= P.a && t.date <= P.b)
     .sort((a, b) => b.amount - a.amount).slice(0, 5);
   $('#d-top').innerHTML = top.length ? `<div class="top-table"><table class="data-table"><thead><tr>
       <th>Tanggal</th><th>Kategori</th><th>Catatan</th><th class="num">Jumlah</th></tr></thead><tbody>
@@ -375,7 +375,7 @@ function renderCashflow(P, cur) {
     // satu bulan → pengeluaran harian
     const nDays = P.end.getDate();
     const vals = Array(nDays).fill(0);
-    for (const t of transactions) {
+    for (const t of withFees(transactions)) {
       if (t.type === 'out' && isFlow(t) && t.date >= P.a && t.date <= P.b) vals[parseISO(t.date).getDate() - 1] += t.amount;
     }
     const labels = vals.map((_, i) => String(i + 1));
@@ -395,7 +395,7 @@ function renderCashflow(P, cur) {
     const n = P.months;
     const inc = Array(n).fill(0), out = Array(n).fill(0);
     const idx = d => (d.getFullYear() - P.start.getFullYear()) * 12 + d.getMonth() - P.start.getMonth();
-    for (const t of transactions) {
+    for (const t of withFees(transactions)) {
       if (t.date < P.a || t.date > P.b || !isFlow(t)) continue;
       const i = idx(parseISO(t.date));
       if (i < 0 || i >= n) continue;

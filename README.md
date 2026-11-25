@@ -6,6 +6,7 @@ Aplikasi pencatatan keuangan pribadi berbasis web (PWA) yang bisa di-install ke 
 - Login email + password (Supabase Auth)
 - Banyak rekening (bank, e-wallet, tunai) dengan saldo awal, plus transfer antar rekening
 - Investasi: obligasi & reksa dana pasar uang (nilai diperbarui manual, dengan pengingat), kripto (harga otomatis dari CoinGecko), kekayaan bersih dan untung/rugi
+- Perbarui saldo kas: selisih dengan bank dicatat sebagai bunga atau biaya admin (tunai: uang tercecer)
 - Catat pemasukan & pengeluaran per kategori
 - Dashboard: saldo, ringkasan periode, arus kas, tren saldo, pengeluaran per kategori
 - Bisa dibuka offline (data terakhir tetap tampil)
@@ -26,6 +27,7 @@ Lalu buka http://127.0.0.1:8080
    1. `supabase-setup.sql`
    2. `supabase-migration-02-rekening.sql` (banyak rekening + transfer)
    3. `supabase-migration-03-investasi.sql` (obligasi, pasar uang, kripto)
+   4. `supabase-migration-04-fee-transfer.sql` (fee transfer)
 3. Isi `config.js` dengan Project URL dan **publishable/anon key**.
    Key ini memang untuk frontend dan aman dipublikasikan, karena data dilindungi Row Level Security.
    **Jangan pernah** memasukkan `service_role` / `secret` key ke repo ini.
