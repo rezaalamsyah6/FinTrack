@@ -1,0 +1,14 @@
+# Sistem / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Lingkungan & rahasia (jangan pernah commit service_role / secret key)
+.env
+.env.*
+
+# Backup data pribadi yang mungkin tersimpan di folder ini
+backup-keuangan-*.json
+keuangan-*.csv
