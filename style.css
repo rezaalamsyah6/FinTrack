@@ -264,6 +264,18 @@ p.panel.empty { padding: 28px 20px; }
 .dash-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 8px 0 18px; }
 .hero { display: flex; flex-direction: column; min-width: 0; }
 .hero > span { font-size: 13px; font-weight: 500; color: var(--muted); }
+.hero-label { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.eye-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -6px 0; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--muted); cursor: pointer; }
+.eye-btn:hover { background: var(--surface-2); color: var(--text); }
+.eye-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.eye-btn svg.i { width: 17px; height: 17px; }
+
+/* mode sembunyikan nominal (khusus Ringkasan) */
+#view-dash.private :is(#d-hero, #d-hero-sub, .t-value, .t-delta, #d-insight b, .chart-card .sub, .hb-val, .cd-val,
+  .acc-row .val, .data-table .num, .chart text.ya) { filter: blur(7px); user-select: none; }
+#view-dash.private :is(#d-hero, .t-value) { filter: blur(10px); }
+body.dash-private #tip { display: none !important; }
 .hero strong { font-size: 40px; font-weight: 650; line-height: 1.1; letter-spacing: -.035em; margin-top: 4px; overflow-wrap: anywhere; }
 .hero small { font-size: 13px; color: var(--muted); margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 @media (min-width: 480px) { .hero strong { font-size: 48px; } }
@@ -360,6 +372,19 @@ p.panel.empty { padding: 28px 20px; }
 .hb-bar { height: 8px; background: var(--s-out); border-radius: 0 4px 4px 0; min-width: 2px; }
 .hb-val { white-space: nowrap; color: var(--text); font-weight: 500; }
 .hb-val small { color: var(--muted); margin-left: 6px; font-weight: 400; }
+
+/* dropdown rincian kategori */
+.cat-toggle { width: 100%; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.cat-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.chev { display: inline-block; width: 6px; height: 6px; margin: 0 2px 2px 8px; border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .15s; vertical-align: middle; }
+.open > .cat-toggle .chev { transform: rotate(-135deg); margin-bottom: -1px; }
+.cat-detail { display: none; list-style: none; margin: 8px 0 4px; padding: 2px 0 2px 12px; border-left: 2px solid var(--border-strong); }
+.open > .cat-detail { display: block; }
+.cat-detail li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--text-2); }
+.cd-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cd-name small, .cd-val small { color: var(--muted); margin-left: 6px; }
+.cd-val { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* saldo per rekening (dashboard) */
 .acc-row {
@@ -559,3 +584,35 @@ dialog form .sub { margin-top: -8px; }
 .tile .t-value { font-size: clamp(15px, 4.4vw, 19px); white-space: nowrap; overflow-wrap: normal; }
 .card strong { white-space: nowrap; overflow-wrap: normal; font-size: clamp(15px, 4.4vw, 18px); }
 .card.balance strong { font-size: clamp(24px, 7vw, 30px); }
+
+/* =====================================================================
+   Simulasi gajian
+   ===================================================================== */
+.sim-hero { margin: 8px 0 4px; }
+.sim-hero strong.neg { color: var(--bad); }
+.sim-salary-label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); }
+.sim-salary { height: 56px; font-size: 22px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.link-btn { display: inline-block; margin-top: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px;
+  font-weight: 600; color: var(--accent); cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.sim-meter { height: 10px; margin-top: 18px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+#sim-meter-fill { height: 100%; width: 0; background: var(--accent); border-radius: 5px; transition: width .2s; }
+#sim-meter-fill.over { background: var(--bad); }
+.sim-stats { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.sim-stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.sim-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.sim-head h2 { margin: 0; }
+.sim-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.sim-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.sim-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.sim-item:last-child { border-bottom: 0; }
+.sim-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(110px, 38%) 40px; gap: 8px; align-items: center; }
+.sim-row input { margin-top: 0; height: 44px; }
+.sim-row .sim-amt { text-align: right; font-variant-numeric: tabular-nums; }
+.sim-bar { height: 6px; margin-top: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.sim-bar div { height: 100%; width: 0; background: var(--s-out); border-radius: 3px; transition: width .2s; }
+.sim-meta { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.sim-meta:empty { display: none; }
+.sim-meta .warn { color: var(--warn); }
+#sim-empty[hidden] { display: none; }

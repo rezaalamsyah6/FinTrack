@@ -1,9 +1,9 @@
 // Service worker: menyimpan file aplikasi agar tetap bisa dibuka tanpa internet.
 // Naikkan nomor versi setiap kali file aplikasi diubah.
-const CACHE = 'keuangan-v8';
+const CACHE = 'keuangan-v15';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
 const FILES = [
-  './', 'index.html', 'style.css', 'app.js', 'dashboard.js', 'config.js', 'manifest.webmanifest',
+  './', 'index.html', 'style.css', 'app.js', 'dashboard.js', 'simulasi.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', SUPABASE_JS,
 ];
 

@@ -59,14 +59,31 @@ function getPeriod(key) {
   };
 }
 
+const FOOD_CAT = 'Makan & Minum';
 function totals(a, b) {
-  let inc = 0, out = 0;
+  let inc = 0, out = 0, food = 0;
   for (const t of withFees(transactions)) {
     if (t.date < a || t.date > b || !isFlow(t)) continue;
     if (t.type === 'in') inc += t.amount; else out += t.amount;
+    if (t.type === 'out' && t.category === FOOD_CAT) food += t.amount;
   }
-  return { inc, out, net: inc - out };
+  return { inc, out, food, net: inc - out };
 }
+
+/* ---------------- Sembunyikan nominal (khusus Ringkasan) ---------------- */
+const PRIVACY_KEY = 'kk_hide_dash';
+function setPrivacy(on) {
+  $('#view-dash').classList.toggle('private', on);
+  document.body.classList.toggle('dash-private', on);
+  const btn = $('#privacy-btn'), label = on ? 'Tampilkan nominal' : 'Sembunyikan nominal';
+  btn.setAttribute('aria-pressed', on);
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+  btn.querySelector('use').setAttribute('href', on ? '#i-eye-off' : '#i-eye');
+  try { localStorage.setItem(PRIVACY_KEY, on ? '1' : ''); } catch { }
+}
+setPrivacy((() => { try { return !!localStorage.getItem(PRIVACY_KEY); } catch { return false; } })());
+$('#privacy-btn').addEventListener('click', () => setPrivacy(!$('#view-dash').classList.contains('private')));
 
 /* ---------------- Tooltip ---------------- */
 const tipEl = $('#tip');
@@ -130,7 +147,7 @@ function columnChart(el, cfg) {
   let s = svgOpen(W, H).replace('role="img"', `role="img" aria-label="${esc(cfg.ariaLabel)}"`);
   for (const t of sc.ticks) {
     s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1"/>`;
-    s += `<text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${compact(t)}</text>`;
+    s += `<text class="ya" x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${compact(t)}</text>`;
   }
   s += `<rect class="hover-band" x="0" y="${m.t}" width="${band}" height="${ph}" fill="var(--grid)" opacity="0" />`;
   for (let i = 0; i < n; i++) {
@@ -179,7 +196,7 @@ function lineChart(el, pts, ariaLabel) {
   let s = svgOpen(W, H).replace('role="img"', `role="img" aria-label="${esc(ariaLabel)}"`);
   for (const t of sc.ticks) {
     s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? 'var(--axis)' : 'var(--grid)'}" stroke-width="1"/>`;
-    s += `<text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${compact(t)}</text>`;
+    s += `<text class="ya" x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${compact(t)}</text>`;
   }
   s += `<path d="${area}" fill="var(--s-in-wash)"/>`;
   s += `<path d="${line}" fill="none" stroke="var(--s-in)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -257,7 +274,7 @@ function renderDashboard() {
   const nTx = transactions.filter(t => matchAcc(t)).length;
   const fAcc = accById(accFilter);
   const hasInv = invAccounts().length > 0;
-  $('#d-hero').previousElementSibling.textContent = fAcc
+  $('#d-hero-label').textContent = fAcc
     ? `${isInv(fAcc) ? 'Nilai' : 'Saldo'} ${fAcc.name}`
     : (hasInv ? 'Kekayaan bersih' : 'Saldo semua rekening');
   $('#d-hero').textContent = rupiah(valueOfFilter());
@@ -298,25 +315,32 @@ function renderDashboard() {
 
   /* ubin */
   const r = rate(cur);
+  // hari untuk rata-rata makan: mulai dari transaksi pertama bila itu jatuh di tengah periode
+  const firstDate = transactions.reduce((m, t) => (t.date < m ? t.date : m), P.b);
+  const fromD = parseISO(firstDate > P.a ? firstDate : P.a);
+  const toD = today < P.end ? today : P.end;
+  const foodDays = Math.max(1, Math.round((toD - fromD) / 864e5) + 1);
   const tile4 = accFilter
     ? tile('Transfer bersih', (trNet > 0 ? '+' : '') + rupiah(trNet),
         `<span class="t-delta">Masuk ${'Rp' + compact(trIn)} · keluar ${'Rp' + compact(trOut)}</span>`)
-    : tile('Rasio menabung', r === null ? '–' : `${fmt1(r)}%`,
-        prv && rate(curToDate) !== null && rate(prv) !== null ? delta(rate(curToDate), rate(prv), true, P, 'pt') : '');
+    : tile('Rata-rata makan/hari', rupiah(Math.round(cur.food / foodDays)),
+        prv ? delta(curToDate.food / foodDays, prv.food / prevDays, false, P) : '');
   $('#d-tiles').innerHTML =
     tile('Pemasukan', rupiah(cur.inc), prv ? delta(curToDate.inc, prv.inc, true, P) : '', 'in') +
     tile('Pengeluaran', rupiah(cur.out), prv ? delta(curToDate.out, prv.out, false, P) : '', 'out') +
     tile('Selisih', (cur.net > 0 ? '+' : '') + rupiah(cur.net), prv ? delta(curToDate.net, prv.net, true, P, 'rp') : '') +
     tile4 +
-    tile('Rata-rata belanja/hari', rupiah(Math.round(cur.out / P.days)),
+    tile('Rata-rata pengeluaran/hari', rupiah(Math.round(cur.out / P.days)),
       prv ? delta(curToDate.out / P.days, prv.out / prevDays, false, P) : '');
 
   /* kategori */
   const byCat = {};
   const cnt = {};
+  const catTx = {};
   for (const t of withFees(transactions)) {
     if (t.type !== 'out' || !isFlow(t) || t.date < P.a || t.date > P.b) continue;
     byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+    (catTx[t.category] ||= []).push(t);
     cnt[t.category] = (cnt[t.category] || 0) + 1;
   }
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
@@ -338,14 +362,16 @@ function renderDashboard() {
 
   $('#cat-sub').textContent = cats.length ? `Total ${rupiah(cur.out)}` : '';
   $('#d-cat').innerHTML = cats.length ? cats.map(([c, v]) => `
-    <div class="hb-row" data-cat="${esc(c)}">
-      <div class="hb-top"><span class="hb-name">${iconOf('out', c)} ${esc(c)}</span>
-        <span class="hb-val">${rupiah(v)}<small>${Math.round(v / cur.out * 100)}%</small></span></div>
+    <div class="hb-row${openCats.has('d:' + c) ? ' open' : ''}" data-cat="${esc(c)}">
+      <button type="button" class="hb-top cat-toggle" aria-expanded="${openCats.has('d:' + c)}"><span class="hb-name">${iconOf('out', c)} ${esc(c)}</span>
+        <span class="hb-val">${rupiah(v)}<small>${Math.round(v / cur.out * 100)}%</small><i class="chev"></i></span></button>
       <div class="hb-bar" style="width:${(v / cats[0][1] * 100).toFixed(1)}%"></div>
+      ${catDetailHTML(catTx[c], v)}
     </div>`).join('') : '<p class="empty">Belum ada pengeluaran di periode ini.</p>';
+  bindCatToggles($('#d-cat'), 'd:');
   document.querySelectorAll('#d-cat .hb-row').forEach(row => {
     const c = row.dataset.cat;
-    const show = e => { setHoverClear(() => {}); showTip(`<b>${iconOf('out', c)} ${esc(c)}</b>`
+    const show = e => { if (e.target.closest('.cat-detail')) return clearHover(); setHoverClear(() => {}); showTip(`<b>${iconOf('out', c)} ${esc(c)}</b>`
       + tipRow('Jumlah', rupiah(byCat[c])) + tipRow('Porsi', `${fmt1(byCat[c] / cur.out * 100)}%`)
       + tipRow('Transaksi', `${cnt[c]}×`), e.clientX, e.clientY); };
     row.onpointermove = show; row.onpointerdown = show;
@@ -499,11 +525,13 @@ function setView(v) {
   $('#view-dash').hidden = v !== 'dash';
   $('#view-tx').hidden = v !== 'tx';
   $('#view-acc').hidden = v !== 'acc';
+  $('#view-sim').hidden = v !== 'sim';
   document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   try { localStorage.setItem('kk_view', v); } catch { }
   clearHover();
   scrollTo(0, 0);
   if (v === 'dash') renderDashboard();
+  if (v === 'sim' && typeof renderSim === 'function') renderSim();
 }
 document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 setView((() => { try { return localStorage.getItem('kk_view') || 'dash'; } catch { return 'dash'; } })());

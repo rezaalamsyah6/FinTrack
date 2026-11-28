@@ -15,7 +15,7 @@ const CATEGORIES = {
   out: [
     ['Makan & Minum', '🍜'], ['Transportasi', '🚗'], ['Belanja', '🛒'], ['Tagihan', '💡'],
     ['Pulsa & Internet', '📱'], ['Kesehatan', '💊'], ['Hiburan', '🎬'], ['Pendidikan', '📚'],
-    ['Keluarga', '👨‍👩‍👧'], ['Biaya Admin', '🏦'], ['Uang Tercecer', '🪙', 'auto'], ['Lainnya', '📦'],
+    ['Keluarga', '👨‍👩‍👧'], ['Peliharaan', '🐾'], ['Biaya Admin', '🏦'], ['Uang Tercecer', '🪙', 'auto'], ['Lainnya', '📦'],
   ],
   in: [
     ['Gaji', '💼'], ['Bonus', '🎁'], ['Usaha', '🏪'], ['Investasi', '📈'], ['Bunga', '🏦'], ['Uang Ditemukan', '🪙', 'auto'], ['Lainnya', '💰'],
@@ -412,6 +412,35 @@ function render() {
   renderTx();
   renderAccounts();
   if (typeof renderDashboard === 'function') renderDashboard();
+  if (typeof updateSim === 'function') updateSim();   // perbarui petunjuk "biasanya" & gaji terakhir
+}
+
+/* Rincian kategori (dropdown): pengeluaran dikelompokkan per catatan */
+const openCats = new Set();   // kunci: prefix kartu + nama kategori, agar tetap terbuka saat render ulang
+function catDetailHTML(list, total) {
+  const groups = new Map();
+  for (const t of list) {
+    const label = (t.note || '').trim();
+    const key = label.toLowerCase();
+    const g = groups.get(key) || { label: label || 'Tanpa catatan', empty: !label, sum: 0, n: 0 };
+    g.sum += t.amount; g.n++;
+    groups.set(key, g);
+  }
+  const rows = [...groups.values()].sort((a, b) => b.sum - a.sum);
+  return `<ul class="cat-detail">${rows.map(g => `
+    <li><span class="cd-name${g.empty ? ' muted' : ''}">${esc(g.label)}${g.n > 1 ? `<small>${g.n}×</small>` : ''}</span>
+      <span class="cd-val">${rupiah(g.sum)}<small>${total ? Math.round(g.sum / total * 100) : 0}%</small></span></li>`).join('')}
+  </ul>`;
+}
+function bindCatToggles(container, prefix) {
+  container.querySelectorAll('.cat-toggle').forEach(btn => btn.addEventListener('click', () => {
+    const row = btn.closest('[data-cat]');
+    const key = prefix + row.dataset.cat;
+    const open = !openCats.has(key);
+    if (open) openCats.add(key); else openCats.delete(key);
+    row.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open);
+  }));
 }
 
 function txRow(t) {
@@ -549,11 +578,15 @@ function renderTx() {
   const byCat = {};
   flow.filter(t => t.type === 'out').forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const outFlow = flow.filter(t => t.type === 'out');
   $('#cat-bars').innerHTML = cats.length ? cats.map(([c, v]) => `
-    <div class="bar-row">
-      <div class="bar-label"><span>${iconOf('out', c)} ${esc(c)}</span><span>${rupiah(v)} · ${Math.round(v / sumOut * 100)}%</span></div>
+    <div class="bar-row${openCats.has('t:' + c) ? ' open' : ''}" data-cat="${esc(c)}">
+      <button type="button" class="bar-label cat-toggle" aria-expanded="${openCats.has('t:' + c)}">
+        <span>${iconOf('out', c)} ${esc(c)}</span><span>${rupiah(v)} · ${Math.round(v / sumOut * 100)}% <i class="chev"></i></span></button>
       <div class="bar-track"><div class="bar-fill" style="width:${(v / cats[0][1] * 100).toFixed(1)}%"></div></div>
+      ${catDetailHTML(outFlow.filter(t => t.category === c), v)}
     </div>`).join('') : '<p class="empty">Tidak ada pengeluaran pada tanggal ini.</p>';
+  bindCatToggles($('#cat-bars'), 't:');
 
   // Daftar transaksi, dikelompokkan per tanggal
   if (!shownTx.length) {
