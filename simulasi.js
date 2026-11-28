@@ -3,7 +3,7 @@
    Simulasi gajian: rencanakan pembagian gaji ke pos-pos pengeluaran.
    Hanya perencanaan, tidak membuat transaksi. Disimpan di localStorage.
    Memakai global dari app.js / dashboard.js: transactions, $, rupiah, esc,
-   withFees, isFlow, CATEGORIES, compact, iso, parseISO.
+   withFees, isFlow, catByRole, isAutoCat, compact, iso, parseISO.
    ===================================================================== */
 
 const SIM_KEY = 'kk_sim';
@@ -21,8 +21,9 @@ const roundUp = (n, step = 10000) => Math.ceil(n / step) * step;
 /* Gaji terakhir yang tercatat (kategori Gaji) */
 function lastSalary() {
   let best = null;
+  const salaryCat = catByRole('in', 'salary');
   for (const t of transactions) {
-    if (t.type === 'in' && t.category === 'Gaji' && (!best || t.date > best.date)) best = t;
+    if (t.type === 'in' && t.category === salaryCat && (!best || t.date > best.date)) best = t;
   }
   return best;
 }
@@ -49,13 +50,12 @@ function monthlyHabit() {
   for (const [c, v] of Object.entries(sum)) avg[c.toLowerCase()] = { cat: c, v: v / months.length };
   return { avg, label };
 }
-const isAutoCat = c => CATEGORIES.out.some(x => x[0] === c && x[2] === 'auto');
 
 /* ---------- Template ---------- */
 const PRESETS = {
   habit() {
     const { avg } = monthlyHabit();
-    const rows = Object.values(avg).filter(a => !isAutoCat(a.cat)).sort((a, b) => b.v - a.v);
+    const rows = Object.values(avg).filter(a => !isAutoCat('out', a.cat)).sort((a, b) => b.v - a.v);
     if (!rows.length) { alert('Belum ada pengeluaran yang tercatat untuk dijadikan acuan.'); return null; }
     return [...rows.map(a => ({ name: a.cat, amount: roundUp(a.v) })), { name: 'Tabungan', amount: 0 }];
   },

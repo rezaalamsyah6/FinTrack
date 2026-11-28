@@ -10,20 +10,86 @@ const ACC_TABLE = 'accounts';
 const KEY_OLD_TX = 'kk_tx';               // data versi lama (sebelum Supabase)
 const cacheKey = () => 'kk_cache2_' + user.id;
 
-// 'auto' = hanya dibuat otomatis oleh "Perbarui saldo", tidak ditawarkan di form transaksi
-const CATEGORIES = {
+/* Kategori. Bisa diubah pengguna (menu "Kelola kategori"), disimpan di profil akun.
+   role = dipakai fitur tertentu: tetap berfungsi walau namanya diganti, dan tidak bisa dihapus.
+   role 'lost' & 'found' = otomatis: hanya dibuat oleh "Perbarui saldo", tidak ditawarkan di form. */
+const DEFAULT_CATS = {
   out: [
-    ['Makan & Minum', '🍜'], ['Transportasi', '🚗'], ['Belanja', '🛒'], ['Tagihan', '💡'],
-    ['Pulsa & Internet', '📱'], ['Kesehatan', '💊'], ['Hiburan', '🎬'], ['Pendidikan', '📚'],
-    ['Keluarga', '👨‍👩‍👧'], ['Peliharaan', '🐾'], ['Biaya Admin', '🏦'], ['Uang Tercecer', '🪙', 'auto'], ['Lainnya', '📦'],
+    { name: 'Makan & Minum', icon: '🍜', role: 'food' }, { name: 'Transportasi', icon: '🚗' }, { name: 'Belanja', icon: '🛒' },
+    { name: 'Tagihan', icon: '💡' }, { name: 'Pulsa & Internet', icon: '📱' }, { name: 'Kesehatan', icon: '💊' },
+    { name: 'Hiburan', icon: '🎬' }, { name: 'Pendidikan', icon: '📚' }, { name: 'Keluarga', icon: '👨‍👩‍👧' },
+    { name: 'Peliharaan', icon: '🐾' }, { name: 'Biaya Admin', icon: '🏦', role: 'admin' },
+    { name: 'Uang Tercecer', icon: '🪙', role: 'lost' }, { name: 'Lainnya', icon: '📦' },
   ],
   in: [
-    ['Gaji', '💼'], ['Bonus', '🎁'], ['Usaha', '🏪'], ['Investasi', '📈'], ['Bunga', '🏦'], ['Uang Ditemukan', '🪙', 'auto'], ['Lainnya', '💰'],
+    { name: 'Gaji', icon: '💼', role: 'salary' }, { name: 'Bonus', icon: '🎁' }, { name: 'Usaha', icon: '🏪' },
+    { name: 'Investasi', icon: '📈' }, { name: 'Bunga', icon: '🏦', role: 'interest' },
+    { name: 'Uang Ditemukan', icon: '🪙', role: 'found' }, { name: 'Lainnya', icon: '💰' },
   ],
 };
-const FEE_CAT = 'Biaya Transfer';         // kategori otomatis untuk fee transfer
+const AUTO_ROLES = ['lost', 'found'];
+const ROLE_LABEL = { food: 'Rata-rata makan/hari', salary: 'Simulasi gajian', admin: 'Perbarui saldo', interest: 'Perbarui saldo',
+  lost: 'otomatis dari Perbarui saldo', found: 'otomatis dari Perbarui saldo' };
+const cloneCats = c => ({ out: c.out.map(x => ({ ...x })), in: c.in.map(x => ({ ...x })) });
+let CATEGORIES = cloneCats(DEFAULT_CATS);
+const FEE_CAT = 'Biaya Transfer';         // kategori otomatis untuk fee transfer (bukan bagian daftar)
+const catByRole = (type, role) => (CATEGORIES[type].find(c => c.role === role) || DEFAULT_CATS[type].find(c => c.role === role)).name;
+const isAutoCat = (type, name) => CATEGORIES[type].some(c => c.name === name && AUTO_ROLES.includes(c.role));
 const iconOf = (type, cat) => type === 'transfer' ? '🔁' : cat === FEE_CAT ? '💸'
-  : (CATEGORIES[type].find(c => c[0] === cat) || [, type === 'in' ? '💰' : '📦'])[1];
+  : (CATEGORIES[type].find(c => c.name === cat)?.icon || (type === 'in' ? '💰' : '📦'));
+
+/* Simpan/muat kategori: profil akun Supabase (tersinkron antar perangkat) + salinan di perangkat */
+const catsKey = () => 'kk_cats_' + user.id;
+function normCats(c) {
+  if (!c || !Array.isArray(c.out) || !Array.isArray(c.in)) return null;
+  const res = {};
+  for (const type of ['out', 'in']) {
+    const seen = new Set();
+    res[type] = [];
+    for (const x of c[type]) {
+      const name = typeof x?.name === 'string' ? x.name.trim().slice(0, 30) : '';
+      if (!name || name === FEE_CAT || seen.has(name)) continue;
+      seen.add(name);
+      res[type].push({ name, icon: String(x.icon || '🏷️').slice(0, 8),
+        ...(x.role ? { role: x.role } : {}), ...(x.hidden ? { hidden: true } : {}) });
+    }
+    // kategori yang dipakai fitur harus selalu ada
+    for (const d of DEFAULT_CATS[type]) if (d.role && !res[type].some(x => x.role === d.role)) res[type].push({ ...d });
+  }
+  return res;
+}
+function readLocalCats() { try { return JSON.parse(localStorage.getItem(catsKey())); } catch { return null; } }
+function loadCats() {
+  const pick = [user?.user_metadata?.categories, readLocalCats()]
+    .filter(normCats).sort((a, b) => (b.updated || 0) - (a.updated || 0))[0];
+  CATEGORIES = pick ? normCats(pick) : cloneCats(DEFAULT_CATS);
+}
+async function pushCats(payload) {
+  if (!sb?.auth?.updateUser) return true;                 // mode lokal lama: cukup di perangkat
+  const { data, error } = await sb.auth.updateUser({ data: { categories: payload } });
+  if (error) { console.warn('Gagal menyimpan kategori ke akun:', error); return false; }
+  if (data?.user) user.user_metadata = data.user.user_metadata;
+  return true;
+}
+async function saveCats() {
+  const payload = { ...cloneCats(CATEGORIES), updated: Date.now() };
+  try { localStorage.setItem(catsKey(), JSON.stringify(payload)); } catch { }
+  return pushCats(payload);
+}
+// ambil versi terbaru dari akun (mis. diubah di perangkat lain); kirim versi perangkat bila lebih baru
+async function syncCats() {
+  if (!sb?.auth?.getUser || !user) return;
+  try {
+    const { data } = await sb.auth.getUser();
+    if (!data?.user) return;
+    user.user_metadata = data.user.user_metadata;
+    const remote = user.user_metadata?.categories, local = readLocalCats();
+    if (normCats(local) && (local.updated || 0) > (remote?.updated || 0)) await pushCats(local);
+    const before = JSON.stringify(CATEGORIES);
+    loadCats();
+    if (JSON.stringify(CATEGORIES) !== before) render();
+  } catch (err) { console.warn('Sinkron kategori gagal:', err); }
+}
 
 // [label, ikon, kelompok]  kelompok: cash = kas, inv = investasi
 const KINDS = {
@@ -381,6 +447,7 @@ async function loadData() {
     $('#offline-note').hidden = true;
     fresh = true;
     refreshPrices();
+    syncCats();
   } catch (err) {
     if (navigator.onLine && err?.code) {        // error dari database, bukan karena offline
       showError(err);
@@ -404,6 +471,7 @@ function showApp() {
   $('#avatar-initial').textContent = (user.email || '?')[0].toUpperCase();
   $('#migrate-btn').hidden = readOldTx().length === 0;
   updateInstallButton();
+  loadCats();
   loadData();
 }
 
@@ -413,6 +481,7 @@ function render() {
   renderAccounts();
   if (typeof renderDashboard === 'function') renderDashboard();
   if (typeof updateSim === 'function') updateSim();   // perbarui petunjuk "biasanya" & gaji terakhir
+  if (typeof renderReport === 'function') renderReport();
 }
 
 /* Rincian kategori (dropdown): pengeluaran dikelompokkan per catatan */
@@ -795,9 +864,9 @@ function balPlan() {
     date: $('#b-date').value, note: 'Penyesuaian saldo',
   });
   const rows = [];
-  if (interest) rows.push(row('in', 'Bunga', interest));
-  if (rest < 0) rows.push(row('out', isCashAcc() ? 'Uang Tercecer' : 'Biaya Admin', -rest));
-  if (rest > 0 && !interest) rows.push(row('in', isCashAcc() ? 'Uang Ditemukan' : 'Bunga', rest));
+  if (interest) rows.push(row('in', catByRole('in', 'interest'), interest));
+  if (rest < 0) rows.push(row('out', catByRole('out', isCashAcc() ? 'lost' : 'admin'), -rest));
+  if (rest > 0 && !interest) rows.push(row('in', catByRole('in', isCashAcc() ? 'found' : 'interest'), rest));
   return { actual, before, diff, rows, unexplained: rest > 0 && interest ? rest : 0 };
 }
 const balRowText = r => `${r.category} ${r.type === 'in' ? '+' : '-'}${rupiah(r.amount)}`;
@@ -948,9 +1017,12 @@ formatAmountInput($('#f-fee'));
 
 function fillCategories(type, selected) {
   if (type === 'transfer') return;
-  $('#f-category').innerHTML = CATEGORIES[type]
-    .filter(([c, , auto]) => !auto || c === selected)      // tetap tampil saat mengubah transaksinya
-    .map(([c, i]) => `<option value="${c}" ${c === selected ? 'selected' : ''}>${i} ${c}</option>`).join('');
+  const list = CATEGORIES[type]
+    .filter(c => (!c.hidden && !AUTO_ROLES.includes(c.role)) || c.name === selected);   // tetap tampil saat mengubah transaksinya
+  // kategori lama yang sudah dihapus tetap bisa dipertahankan saat mengedit transaksinya
+  if (selected && !list.some(c => c.name === selected)) list.push({ name: selected, icon: iconOf(type, selected) });
+  $('#f-category').innerHTML = list
+    .map(c => `<option value="${esc(c.name)}" ${c.name === selected ? 'selected' : ''}>${c.icon} ${esc(c.name)}</option>`).join('');
 }
 function fillAccountSelects(from, to) {
   const opts = accounts.map(a => `<option value="${a.id}">${kindOf(a)[1]} ${esc(a.name)}</option>`).join('');
@@ -1165,6 +1237,8 @@ menu.addEventListener('click', async e => {
     download(`backup-keuangan-${todayISO()}.json`, JSON.stringify(transactions.map(pick), null, 2), 'application/json');
   } else if (act === 'import') {
     if (needOnline() && importTarget()) $('#import-file').click();
+  } else if (act === 'cats') {
+    openCatManager();
   } else if (act === 'csv') {
     const rows = [['Tanggal', 'Jenis', 'Rekening', 'Ke Rekening', 'Kategori', 'Jumlah', 'Catatan', 'Fee']]
       .concat([...transactions].sort((a, b) => a.date.localeCompare(b.date))

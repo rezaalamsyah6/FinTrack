@@ -73,6 +73,7 @@
           <button data-act="migrate" id="migrate-btn" hidden><svg class="i"><use href="#i-cloud"/></svg>Pindahkan data lama ke akun</button>
           <button data-act="export"><svg class="i"><use href="#i-download"/></svg>Backup data (JSON)</button>
           <button data-act="import"><svg class="i"><use href="#i-upload"/></svg>Impor dari backup</button>
+          <button data-act="cats"><svg class="i"><use href="#i-list"/></svg>Kelola kategori</button>
           <button data-act="csv"><svg class="i"><use href="#i-file"/></svg>Ekspor CSV</button>
           <button data-act="logout" class="danger-item"><svg class="i"><use href="#i-logout"/></svg>Keluar</button>
         </div>
@@ -226,6 +227,46 @@
           sehingga tidak terhitung sebagai pemasukan atau pengeluaran.</p>
       </div>
 
+      <!-- ============ LAPORAN BULANAN ============ -->
+      <div id="view-rep" class="view" hidden>
+        <div class="rep-head">
+          <div class="rep-nav">
+            <button id="rep-prev" type="button" class="icon-btn" aria-label="Bulan sebelumnya"><svg class="i"><use href="#i-left"/></svg></button>
+            <h2 id="rep-month" class="rep-month">–</h2>
+            <button id="rep-next" type="button" class="icon-btn" aria-label="Bulan berikutnya"><svg class="i"><use href="#i-right"/></svg></button>
+          </div>
+          <select class="acc-filter" aria-label="Filter rekening"></select>
+        </div>
+        <p id="rep-note" class="sub rep-note"></p>
+
+        <div class="tiles" id="rep-tiles"></div>
+
+        <div class="rep-actions">
+          <button id="rep-dl-tx" type="button" class="btn small"><svg class="i"><use href="#i-download"/></svg>Transaksi (CSV)</button>
+          <button id="rep-dl-sum" type="button" class="btn small"><svg class="i"><use href="#i-download"/></svg>Laporan (CSV)</button>
+          <button id="rep-print" type="button" class="btn small"><svg class="i"><use href="#i-file"/></svg>Cetak / PDF</button>
+        </div>
+
+        <div class="dash-grid">
+          <section class="panel chart-card">
+            <header><div><h2>Saldo</h2></div></header>
+            <div id="rep-balance"></div>
+          </section>
+          <section class="panel chart-card">
+            <header><div><h2>Pemasukan per kategori</h2></div></header>
+            <div id="rep-in"></div>
+          </section>
+          <section class="panel chart-card span-2">
+            <header><div><h2>Pengeluaran per kategori</h2></div></header>
+            <div id="rep-out"></div>
+          </section>
+          <section class="panel chart-card span-2 rep-year-card">
+            <header><div><h2 id="rep-year-title">Ringkasan tahunan</h2><p class="sub">Ketuk bulan untuk melihat laporannya</p></div></header>
+            <div id="rep-year"></div>
+          </section>
+        </div>
+      </div>
+
       <!-- ============ SIMULASI GAJIAN ============ -->
       <div id="view-sim" class="view" hidden>
         <div class="hero sim-hero">
@@ -265,6 +306,7 @@
       <button data-view="dash" class="active"><svg class="i"><use href="#i-dash"/></svg>Ringkasan</button>
       <button data-view="tx"><svg class="i"><use href="#i-list"/></svg>Transaksi</button>
       <button data-view="acc"><svg class="i"><use href="#i-wallet"/></svg>Rekening</button>
+      <button data-view="rep"><svg class="i"><use href="#i-file"/></svg>Laporan</button>
       <button data-view="sim"><svg class="i"><use href="#i-calc"/></svg>Simulasi</button>
       <button id="add-btn" class="fab" aria-label="Tambah transaksi"><svg class="i"><use href="#i-plus"/></svg></button>
     </nav>
@@ -363,6 +405,24 @@
     </form>
   </dialog>
 
+  <!-- ============ KELOLA KATEGORI ============ -->
+  <dialog id="cat-dialog">
+    <form id="cat-form" method="dialog">
+      <h2>Kelola kategori</h2>
+      <div class="type-toggle cat-type">
+        <label><input type="radio" name="cat-type" value="out" checked><span>Pengeluaran</span></label>
+        <label><input type="radio" name="cat-type" value="in"><span>Pemasukan</span></label>
+      </div>
+      <p class="sub cat-hint">Ketuk kategori untuk mengubah nama, ikon, atau menyembunyikannya.</p>
+      <ul id="cat-list" class="cat-list"></ul>
+      <button type="button" id="cat-add" class="btn cat-add">＋ Tambah kategori</button>
+      <div class="cat-foot">
+        <button type="button" id="cat-cancel" class="btn">Batal</button>
+        <button type="button" id="cat-save" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ============ PERBARUI SALDO KAS ============ -->
   <dialog id="bal-dialog">
     <form id="bal-form" method="dialog">
@@ -409,5 +469,7 @@
   <script src="app.js"></script>
   <script src="dashboard.js"></script>
   <script src="simulasi.js"></script>
+  <script src="laporan.js"></script>
+  <script src="kategori.js"></script>
 </body>
 </html>

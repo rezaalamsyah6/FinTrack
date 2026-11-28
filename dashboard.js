@@ -59,13 +59,14 @@ function getPeriod(key) {
   };
 }
 
-const FOOD_CAT = 'Makan & Minum';
+
 function totals(a, b) {
   let inc = 0, out = 0, food = 0;
+  const foodCat = catByRole('out', 'food');
   for (const t of withFees(transactions)) {
     if (t.date < a || t.date > b || !isFlow(t)) continue;
     if (t.type === 'in') inc += t.amount; else out += t.amount;
-    if (t.type === 'out' && t.category === FOOD_CAT) food += t.amount;
+    if (t.type === 'out' && t.category === foodCat) food += t.amount;
   }
   return { inc, out, food, net: inc - out };
 }
@@ -526,12 +527,14 @@ function setView(v) {
   $('#view-tx').hidden = v !== 'tx';
   $('#view-acc').hidden = v !== 'acc';
   $('#view-sim').hidden = v !== 'sim';
+  $('#view-rep').hidden = v !== 'rep';
   document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   try { localStorage.setItem('kk_view', v); } catch { }
   clearHover();
   scrollTo(0, 0);
   if (v === 'dash') renderDashboard();
   if (v === 'sim' && typeof renderSim === 'function') renderSim();
+  if (v === 'rep' && typeof renderReport === 'function') renderReport();
 }
 document.querySelectorAll('.tabbar button[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 setView((() => { try { return localStorage.getItem('kk_view') || 'dash'; } catch { return 'dash'; } })());

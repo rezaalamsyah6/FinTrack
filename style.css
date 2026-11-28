@@ -310,6 +310,7 @@ body.dash-private #tip { display: none !important; }
 @media (min-width: 760px) {
   .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
   .tiles .tile:last-child:nth-child(odd) { grid-column: auto; }
+  #rep-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .tile {
   background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
@@ -616,3 +617,85 @@ dialog form .sub { margin-top: -8px; }
 .sim-meta:empty { display: none; }
 .sim-meta .warn { color: var(--warn); }
 #sim-empty[hidden] { display: none; }
+
+/* =====================================================================
+   Laporan bulanan
+   ===================================================================== */
+.rep-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 2px; }
+.rep-nav { display: flex; align-items: center; gap: 4px; }
+.rep-month { margin: 0; min-width: 150px; text-align: center; font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
+.rep-nav .icon-btn:disabled { opacity: .3; cursor: default; background: none; }
+.rep-head .acc-filter { width: auto; min-width: 180px; margin-top: 0; height: 40px; font-size: 14px; }
+.rep-note { margin: 0 0 12px 4px; min-height: 1em; }
+.rep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.rep-actions svg.i { width: 16px; height: 16px; }
+#view-rep .top-table { max-height: none; }
+.rep-bal { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.rep-bal span { color: var(--text-2); }
+.rep-bal b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rep-bal:nth-last-child(2) { border-bottom: 0; }
+.rep-bal b.pos { color: var(--good); }
+#view-rep .neg { color: var(--bad); }
+#view-rep .data-table small.muted { color: var(--muted); font-weight: 400; }
+#view-rep tfoot td { padding: 11px 6px; border-top: 1px solid var(--border-strong); font-weight: 650; }
+#view-rep tr.sel td { background: var(--surface-2); font-weight: 600; }
+
+/* Cetak / simpan PDF: hanya isi laporan */
+@media print {
+  :root { --bg: #fff; --surface: #fff; --surface-2: #f1f3f5; --text: #0b0f14; --text-2: #4b5563; --muted: #6b7280;
+    --border: #e5e7eb; --border-strong: #d1d5db; --good: #0a7d55; --bad: #d03b3b; --s-in: #2a78d6; --s-out: #eb6834; color-scheme: light; }
+  .topbar, .tabbar, #tip, .offline-note, .rep-actions, .rep-nav .icon-btn, .rep-head .acc-filter,
+  .rep-year-card .sub, dialog { display: none !important; }
+  body, .panel { background: #fff !important; color: #000 !important; box-shadow: none !important; }
+  main { padding: 0 !important; }
+  .panel { break-inside: avoid; border-color: #ccc !important; }
+  .rep-month { text-align: left; }
+  #view-rep tr.sel td { background: none; font-weight: inherit; }
+}
+
+/* =====================================================================
+   Kelola kategori
+   ===================================================================== */
+/* tiga bagian: judul & pilihan jenis tetap di atas, daftar digulir, tombol tetap di bawah */
+#cat-dialog { overflow: hidden; }
+#cat-dialog form { display: flex; flex-direction: column; gap: 12px; max-height: 92dvh; }
+#cat-dialog form > * { flex-shrink: 0; }
+#cat-dialog form::before { align-self: center; }
+.type-toggle.cat-type { grid-template-columns: repeat(2, 1fr); }
+.cat-hint { margin: -4px 2px 0 !important; }
+.cat-list { flex: 1 1 auto !important; min-height: 120px; overflow-y: auto; overscroll-behavior: contain;
+  list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r); }
+.cat-item + .cat-item { border-top: 1px solid var(--border); }
+.cat-row { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 0; background: none;
+  font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.cat-row:hover { background: var(--surface-2); }
+.cat-row:focus { outline: none; }
+.cat-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cat-row svg.i { width: 16px; height: 16px; color: var(--muted); }
+.cat-ic { width: 28px; flex-shrink: 0; text-align: center; font-size: 20px; line-height: 1; }
+.cat-nm { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cat-n { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.cat-item.is-hidden .cat-ic, .cat-item.is-hidden .cat-nm { opacity: .45; }
+.cat-tag { font-size: 11px; font-weight: 500; line-height: 1.6; color: var(--muted); background: var(--surface-2); padding: 0 7px; border-radius: 6px; }
+.cat-tag.role { color: var(--accent); background: var(--accent-soft); }
+
+/* panel edit */
+.cat-item.editing { background: var(--surface-2); }
+.cat-edit { padding: 14px 12px; display: grid; gap: 12px; }
+.cat-edit-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; }
+.cat-edit .cat-icon-in, .cat-edit .cat-name-in { margin-top: 0; height: 46px; background: var(--surface); border-color: var(--border-strong); }
+.cat-icon-in { text-align: center; font-size: 22px; padding: 0 4px; }
+.cat-edit-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cat-edit-note b { color: var(--text-2); font-weight: 600; }
+.cat-check { display: flex; align-items: center; gap: 10px; font-size: 14px !important; font-weight: 500; color: var(--text) !important; cursor: pointer; }
+.cat-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.cat-edit-actions { display: flex; gap: 8px; align-items: center; }
+.cat-edit-actions .btn { height: 38px; }
+
+/* tombol bawah */
+.cat-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cat-add { width: 100%; height: 44px; border-style: dashed; color: var(--text-2); }
+.cat-add:disabled { opacity: .5; cursor: default; }
+.cat-tag.new { color: var(--s-in); background: var(--s-in-wash); }
+.cat-foot .btn { height: 48px; }
+.cat-foot .btn:disabled { opacity: .45; cursor: default; }
