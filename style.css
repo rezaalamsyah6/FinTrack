@@ -271,11 +271,9 @@ p.panel.empty { padding: 28px 20px; }
 .eye-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .eye-btn svg.i { width: 17px; height: 17px; }
 
-/* mode sembunyikan nominal (khusus Ringkasan) */
-#view-dash.private :is(#d-hero, #d-hero-sub, .t-value, .t-delta, #d-insight b, .chart-card .sub, .hb-val, .cd-val,
-  .acc-row .val, .data-table .num, .chart text.ya) { filter: blur(7px); user-select: none; }
-#view-dash.private :is(#d-hero, .t-value) { filter: blur(10px); }
-body.dash-private #tip { display: none !important; }
+/* mode sembunyikan nominal (khusus Ringkasan): angka diganti "---" lewat JS */
+.chart-hidden { display: grid; place-items: center; height: 220px; font-size: 28px; font-weight: 600; letter-spacing: .1em;
+  color: var(--muted); background: var(--surface-2); border-radius: var(--r); }
 .hero strong { font-size: 40px; font-weight: 650; line-height: 1.1; letter-spacing: -.035em; margin-top: 4px; overflow-wrap: anywhere; }
 .hero small { font-size: 13px; color: var(--muted); margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 @media (min-width: 480px) { .hero strong { font-size: 48px; } }

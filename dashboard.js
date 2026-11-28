@@ -71,20 +71,28 @@ function totals(a, b) {
   return { inc, out, food, net: inc - out };
 }
 
-/* ---------------- Sembunyikan nominal (khusus Ringkasan) ---------------- */
+/* ---------------- Sembunyikan nominal (khusus Ringkasan) ----------------
+   Yang disembunyikan (diganti "---"): kekayaan/saldo utama, kas & investasi,
+   pemasukan, selisih, dan tren saldo. Pengeluaran & kategori tetap terlihat. */
 const PRIVACY_KEY = 'kk_hide_dash';
-function setPrivacy(on) {
+const HIDDEN = '---';
+const isPrivate = () => $('#view-dash').classList.contains('private');
+const hideIf = v => (isPrivate() ? HIDDEN : v);
+// satu pengaturan untuk tab Ringkasan & Rekening (tombol mata ada di keduanya)
+function setPrivacy(on, rerender = true) {
   $('#view-dash').classList.toggle('private', on);
-  document.body.classList.toggle('dash-private', on);
-  const btn = $('#privacy-btn'), label = on ? 'Tampilkan nominal' : 'Sembunyikan nominal';
-  btn.setAttribute('aria-pressed', on);
-  btn.setAttribute('aria-label', label);
-  btn.title = label;
-  btn.querySelector('use').setAttribute('href', on ? '#i-eye-off' : '#i-eye');
+  const label = on ? 'Tampilkan nominal' : 'Sembunyikan nominal';
+  document.querySelectorAll('.privacy-toggle').forEach(btn => {
+    btn.setAttribute('aria-pressed', on);
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.querySelector('use').setAttribute('href', on ? '#i-eye-off' : '#i-eye');
+  });
   try { localStorage.setItem(PRIVACY_KEY, on ? '1' : ''); } catch { }
+  if (rerender) { clearHover(); renderAccounts(); renderDashboard(); }
 }
-setPrivacy((() => { try { return !!localStorage.getItem(PRIVACY_KEY); } catch { return false; } })());
-$('#privacy-btn').addEventListener('click', () => setPrivacy(!$('#view-dash').classList.contains('private')));
+setPrivacy((() => { try { return !!localStorage.getItem(PRIVACY_KEY); } catch { return false; } })(), false);
+document.querySelectorAll('.privacy-toggle').forEach(b => b.addEventListener('click', () => setPrivacy(!isPrivate())));
 
 /* ---------------- Tooltip ---------------- */
 const tipEl = $('#tip');
@@ -278,14 +286,15 @@ function renderDashboard() {
   $('#d-hero-label').textContent = fAcc
     ? `${isInv(fAcc) ? 'Nilai' : 'Saldo'} ${fAcc.name}`
     : (hasInv ? 'Kekayaan bersih' : 'Saldo semua rekening');
-  $('#d-hero').textContent = rupiah(valueOfFilter());
+  const priv = isPrivate();
+  $('#d-hero').textContent = hideIf(rupiah(valueOfFilter()));
   const asOf = `per ${today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
   if (fAcc && isInv(fAcc)) {
-    $('#d-hero-sub').innerHTML = `Modal ${rupiah(balanceOf(fAcc.id))} ${gainHTML(valueOf(fAcc.id), balanceOf(fAcc.id))} · ${esc(invStatus(fAcc).text)}`;
+    $('#d-hero-sub').innerHTML = `Modal ${hideIf(rupiah(balanceOf(fAcc.id)))} ${priv ? '' : gainHTML(valueOf(fAcc.id), balanceOf(fAcc.id))} · ${esc(statusText(fAcc, priv))}`;
   } else if (!fAcc && hasInv) {
     const inv = invAccounts();
     const iv = inv.reduce((s, a) => s + valueOf(a.id), 0), ic = inv.reduce((s, a) => s + balanceOf(a.id), 0);
-    $('#d-hero-sub').innerHTML = `Kas ${rupiah(netWorth() - iv)} · Investasi ${rupiah(iv)} ${gainHTML(iv, ic)} · ${asOf}`;
+    $('#d-hero-sub').innerHTML = `Kas ${hideIf(rupiah(netWorth() - iv))} · Investasi ${hideIf(rupiah(iv))} ${priv ? '' : gainHTML(iv, ic)} · ${asOf}`;
   } else {
     $('#d-hero-sub').textContent = `Dari ${nTx.toLocaleString('id-ID')} transaksi · ${asOf}`;
   }
@@ -327,9 +336,9 @@ function renderDashboard() {
     : tile('Rata-rata makan/hari', rupiah(Math.round(cur.food / foodDays)),
         prv ? delta(curToDate.food / foodDays, prv.food / prevDays, false, P) : '');
   $('#d-tiles').innerHTML =
-    tile('Pemasukan', rupiah(cur.inc), prv ? delta(curToDate.inc, prv.inc, true, P) : '', 'in') +
+    tile('Pemasukan', hideIf(rupiah(cur.inc)), prv && !priv ? delta(curToDate.inc, prv.inc, true, P) : '', 'in') +
     tile('Pengeluaran', rupiah(cur.out), prv ? delta(curToDate.out, prv.out, false, P) : '', 'out') +
-    tile('Selisih', (cur.net > 0 ? '+' : '') + rupiah(cur.net), prv ? delta(curToDate.net, prv.net, true, P, 'rp') : '') +
+    tile('Selisih', hideIf((cur.net > 0 ? '+' : '') + rupiah(cur.net)), prv && !priv ? delta(curToDate.net, prv.net, true, P, 'rp') : '') +
     tile4 +
     tile('Rata-rata pengeluaran/hari', rupiah(Math.round(cur.out / P.days)),
       prv ? delta(curToDate.out / P.days, prv.out / prevDays, false, P) : '');
@@ -351,8 +360,8 @@ function renderDashboard() {
   if (cats.length) parts.push(`Pengeluaran terbesar ada di <b>${esc(cats[0][0])}</b> (${Math.round(cats[0][1] / cur.out * 100)}% dari total).`);
   if (accFilter && (trIn || trOut)) {
     const chg = cur.net + trNet;
-    parts.push(`Termasuk transfer, saldo ${esc(accName(accFilter))} <b>${chg >= 0 ? 'naik' : 'turun'} ${rupiah(Math.abs(chg))}</b> di periode ini.`);
-  } else {
+    if (!priv) parts.push(`Termasuk transfer, saldo ${esc(accName(accFilter))} <b>${chg >= 0 ? 'naik' : 'turun'} ${rupiah(Math.abs(chg))}</b> di periode ini.`);
+  } else if (!priv) {          // kalimat ini memuat pemasukan/selisih, jadi ikut disembunyikan
     if (cur.inc > 0 && cur.net >= 0) parts.push(`Anda menyisihkan <b>${fmt1(r)}%</b> dari pemasukan.`);
     if (cur.net < 0) parts.push(`Pengeluaran <b>melebihi pemasukan ${rupiah(-cur.net)}</b> di periode ini.`);
   }
@@ -456,6 +465,16 @@ function renderCashflow(P, cur) {
 }
 
 function renderBalance(P) {
+  const card = document.querySelector('[data-chart="bal"]');
+  card.querySelector('.tbl-toggle').hidden = isPrivate();
+  if (isPrivate()) {             // tren saldo disembunyikan: tanpa grafik, tabel, maupun tooltip
+    $('#bal-sub').textContent = HIDDEN;
+    $('#bal-chart').hidden = false;
+    $('#bal-chart').innerHTML = `<div class="chart-hidden" aria-label="Tren saldo disembunyikan">${HIDDEN}</div>`;
+    card.querySelector('.chart-table').hidden = true;
+    D.tables.bal = null;
+    return;
+  }
   const endD = P.today < P.end ? P.today : P.end;
   let opening = openingOf();
   const perDay = {};
@@ -494,7 +513,10 @@ function renderAccBreakdown() {
   card.hidden = accounts.length < 2 || !!accFilter;
   $('#d-top').closest('section').classList.toggle('span-2', card.hidden);
   if (card.hidden) return;
-  const rows = accounts.map(a => ({ a, bal: valueOf(a.id) })).sort((x, y) => y.bal - x.bal);
+  const priv = isPrivate();
+  // saat disembunyikan, urutkan per nama agar urutan tidak membocorkan besar saldo
+  const rows = accounts.map(a => ({ a, bal: valueOf(a.id) }))
+    .sort(priv ? (x, y) => x.a.name.localeCompare(y.a.name) : (x, y) => y.bal - x.bal);
   const posTotal = rows.reduce((s, r) => s + Math.max(0, r.bal), 0);
   $('#d-acc').previousElementSibling.querySelector('h2').textContent =
     invAccounts().length ? 'Kas & investasi' : 'Saldo per rekening';
@@ -503,8 +525,8 @@ function renderAccBreakdown() {
     <div class="acc-row" data-acc="${a.id}">
       <span>${kindOf(a)[1]}</span>
       <span class="name">${esc(a.name)}${isInv(a) && invStatus(a).stale ? ' <small title="Nilai perlu diperbarui">⚠️</small>' : ''}</span>
-      <span class="val">${rupiah(bal)}</span>
-      <span class="share">${posTotal > 0 && bal > 0 ? Math.round(bal / posTotal * 100) + '%' : '–'}</span>
+      <span class="val">${priv ? HIDDEN : rupiah(bal)}</span>
+      <span class="share">${priv ? '' : posTotal > 0 && bal > 0 ? Math.round(bal / posTotal * 100) + '%' : '–'}</span>
     </div>`).join('');
 }
 $('#d-acc').addEventListener('click', e => {

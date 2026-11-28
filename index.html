@@ -90,7 +90,7 @@
         <div class="dash-head">
           <div class="hero">
             <div class="hero-label"><span id="d-hero-label">Saldo saat ini</span>
-              <button id="privacy-btn" class="eye-btn" type="button" aria-pressed="false" aria-label="Sembunyikan nominal" title="Sembunyikan nominal"><svg class="i"><use href="#i-eye"/></svg></button></div>
+              <button id="privacy-btn" class="eye-btn privacy-toggle" type="button" aria-pressed="false" aria-label="Sembunyikan nominal" title="Sembunyikan nominal"><svg class="i"><use href="#i-eye"/></svg></button></div>
             <strong id="d-hero">Rp0</strong>
             <small id="d-hero-sub"></small>
           </div>
@@ -212,7 +212,8 @@
       <!-- ============ REKENING ============ -->
       <div id="view-acc" class="view" hidden>
         <div class="hero acc-hero">
-          <span id="acc-total-label">Total saldo semua rekening</span>
+          <div class="hero-label"><span id="acc-total-label">Total saldo semua rekening</span>
+            <button class="eye-btn privacy-toggle" type="button" aria-pressed="false" aria-label="Sembunyikan nominal" title="Sembunyikan nominal"><svg class="i"><use href="#i-eye"/></svg></button></div>
           <strong id="acc-total">Rp0</strong>
           <small id="acc-total-sub"></small>
         </div>

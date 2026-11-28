@@ -722,16 +722,26 @@ function invStatus(a) {
   return { text: `${d > STALE_DAYS ? '⚠️ ' : ''}Update terakhir ${fmtDate(a.value_updated_at)} · ${ago}`, stale: d > STALE_DAYS };
 }
 
+// status investasi; saat nominal disembunyikan, jumlah koin kripto diganti "---" (koin × harga = nilai)
+const statusText = (a, priv) => {
+  const t = invStatus(a).text;
+  return priv && a.kind === 'crypto' ? t.replace(/^\S+/, '---') : t;
+};
+
 function renderAccounts() {
   const inv = invAccounts(), cash = cashAccounts();
   const hasInv = inv.length > 0;
   const cashTotal = cash.reduce((s, a) => s + balanceOf(a.id), 0);
   const invValue = inv.reduce((s, a) => s + valueOf(a.id), 0);
   const invCost = inv.reduce((s, a) => s + balanceOf(a.id), 0);
+  // tombol mata (pengaturannya di dashboard.js): nominal diganti "---"
+  const priv = typeof isPrivate === 'function' && isPrivate();
+  const money = v => (priv ? '---' : rupiah(v));
+  const gain = (v, c) => (priv ? '' : gainHTML(v, c));
   $('#acc-total-label').textContent = hasInv ? 'Kekayaan bersih (kas + investasi)' : 'Total saldo semua rekening';
-  $('#acc-total').textContent = rupiah(cashTotal + invValue);
+  $('#acc-total').textContent = money(cashTotal + invValue);
   $('#acc-total-sub').innerHTML = hasInv
-    ? `Kas ${rupiah(cashTotal)} · Investasi ${rupiah(invValue)} ${gainHTML(invValue, invCost)}` : '';
+    ? `Kas ${money(cashTotal)} · Investasi ${money(invValue)} ${gain(invValue, invCost)}` : '';
   $('#cash-head').hidden = !hasInv;
   $('#inv-head').hidden = !hasInv;
 
@@ -748,7 +758,7 @@ function renderAccounts() {
       <div class="tx-icon">${kindOf(a)[1]}</div>
       <div class="acc-main"><div class="acc-name">${esc(a.name)}</div>
         <div class="acc-meta">${kindOf(a)[0]} · ${n.toLocaleString('id-ID')} transaksi</div></div>
-      <div><div class="acc-bal ${bal < 0 ? 'neg' : ''}">${rupiah(bal)}</div></div>
+      <div><div class="acc-bal ${bal < 0 && !priv ? 'neg' : ''}">${money(bal)}</div></div>
       <div class="acc-actions row">
         <button data-update-bal="${a.id}">↻ Perbarui saldo</button>
         <button data-view-acc="${a.id}">Lihat dashboard ›</button></div>
@@ -761,9 +771,9 @@ function renderAccounts() {
     return `<li class="acc-item" data-id="${a.id}">
       <div class="tx-icon">${kindOf(a)[1]}</div>
       <div class="acc-main"><div class="acc-name">${esc(a.name)}</div>
-        <div class="acc-meta">${kindOf(a)[0]} · modal ${rupiah(cost)}</div>
-        <div class="acc-sub ${st.stale ? 'stale' : ''}">${esc(st.text)}</div></div>
-      <div><div class="acc-bal">${rupiah(value)}</div>${gainHTML(value, cost)}</div>
+        <div class="acc-meta">${kindOf(a)[0]} · modal ${money(cost)}</div>
+        <div class="acc-sub ${st.stale ? 'stale' : ''}">${esc(statusText(a, priv))}</div></div>
+      <div><div class="acc-bal">${money(value)}</div>${gain(value, cost)}</div>
       <div class="acc-actions row">
         ${a.kind === 'crypto' ? '' : `<button data-update-val="${a.id}">↻ Perbarui nilai</button>`}
         <button data-view-acc="${a.id}">Lihat dashboard ›</button></div>
